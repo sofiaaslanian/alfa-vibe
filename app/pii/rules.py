@@ -1240,6 +1240,17 @@ PERSON_CLIENT_RE = re.compile(
     rf"\s*[»\"']?"
     rf"(?=[\s,.;:!?»\"']|$)"
 )
+# Long-text fast path: find only role anchors globally, then run the expensive
+# name grammar inside a bounded suffix. This preserves offsets/semantics while
+# avoiding repeated backtracking across hundreds of thousands of characters.
+PERSON_CLIENT_ANCHOR_RE = re.compile(
+    rf"(?<![А-Яа-яЁёA-Za-z])(?i:{_PERSON_ROLE_WORD})"
+)
+PERSON_CLIENT_SUFFIX_RE = re.compile(
+    rf"\s*[:\-—–]?\s*[«\"']?\s*"
+    rf"({_RU_FIO_2_3}|{_LAT_FIO})"
+    rf"\s*[»\"']?(?=[\s,.;:!?»\"']|$)"
+)
 # Free-text contact: capitalised name(s)
 PERSON_CONTACT_RE = re.compile(
     rf"(?<![А-Яа-яЁёA-Za-z])"
@@ -1419,8 +1430,19 @@ def detect_person_labelled(text: str) -> list[Finding]:
     for m in PERSON_JSON_CUSTOMER_RE.finditer(text):
         _add(m.start(1), m.end(1), 0.95, "person_json_customer_v2")
 
+    # PERSON_CLIENT_RE is disproportionately expensive on long repetitive
+    # support transcripts ("Клиент обратился..." repeated thousands of times).
+    if len(text) >= 16_384:
+        for anchor in PERSON_CLIENT_ANCHOR_RE.finditer(text):
+            suffix_end = min(len(text), anchor.end() + 120)
+            m = PERSON_CLIENT_SUFFIX_RE.match(text, anchor.end(), suffix_end)
+            if m:
+                _add(m.start(1), m.end(1), 0.9, "person_role_rule_v2")
+    else:
+        for m in PERSON_CLIENT_RE.finditer(text):
+            _add(m.start(1), m.end(1), 0.9, "person_role_rule_v2")
+
     for regex, score, det in (
-        (PERSON_CLIENT_RE, 0.9, "person_role_rule_v2"),
         (PERSON_CONTACT_RE, 0.88, "person_contact_rule_v2"),
         (PERSON_CALLED_FRONT_RE, 0.92, "person_called_front_rule_v2"),
     ):
