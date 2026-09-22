@@ -167,20 +167,6 @@ def should_skip_address(text: str, start: int, end: int) -> bool:
     return not is_personal_address_mention(text, start, end)
 
 
-def is_personal_inn_mention(text: str, start: int, end: int) -> bool:
-    """Checksum-valid INN is always client-format PII (format-first).
-
-    Decoy labels («договор», «заказ», «ID операции») do not drop the span —
-    org scoring: miss costs more than excess mask. Detector already rejected
-    bad checksums.
-    """
-    return True
-
-
-def should_skip_inn(text: str, start: int, end: int) -> bool:
-    return not is_personal_inn_mention(text, start, end)
-
-
 # ── Phone: personal contact vs bank support / public hotline ───────────────
 PHONE_PERSONAL_RE = re.compile(
     r"(?i)(?:"
