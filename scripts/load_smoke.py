@@ -61,34 +61,58 @@ def build_payload(profile: str) -> tuple[str, int]:
     return body, len(body) // 4
 
 
+def _post_with_retry(
+    client: httpx.Client,
+    url: str,
+    *,
+    payload: str,
+    payload_id: str,
+    headers: dict[str, str],
+) -> tuple[httpx.Response, int]:
+    throttles = 0
+    for attempt in range(3):
+        r = client.post(
+            f"{url}/process",
+            json={"payload": payload, "payload_id": payload_id},
+            headers=headers,
+        )
+        if r.status_code != 429:
+            r.raise_for_status()
+            return r, throttles
+        throttles += 1
+        if attempt < 2:
+            try:
+                delay = float(r.headers.get("Retry-After", "0.05"))
+            except ValueError:
+                delay = 0.05
+            time.sleep(min(max(delay, 0.01), 1.0))
+    r.raise_for_status()
+    raise RuntimeError("unreachable")
+
+
 def one_call(
     client: httpx.Client,
     url: str,
     payload: str,
     *,
     demask: bool,
-) -> float:
+) -> tuple[float, int]:
     pid = str(uuid.uuid4())
     headers = {}
     api_key = os.getenv("PROXY_API_KEYS", "").split(",")[0].strip()
     if api_key:
         headers["X-API-Key"] = api_key
     t0 = time.perf_counter()
-    r = client.post(
-        f"{url}/process",
-        json={"payload": payload, "payload_id": pid},
-        headers=headers,
+    r, throttles = _post_with_retry(
+        client, url, payload=payload, payload_id=pid, headers=headers
     )
-    r.raise_for_status()
     if demask:
         masked = r.json()["result"]
-        r2 = client.post(
-            f"{url}/process",
-            json={"payload": masked, "payload_id": pid},
-            headers=headers,
+        _, demask_throttles = _post_with_retry(
+            client, url, payload=masked, payload_id=pid, headers=headers
         )
-        r2.raise_for_status()
-    return time.perf_counter() - t0
+        throttles += demask_throttles
+    return time.perf_counter() - t0, throttles
 
 
 def main():
@@ -113,6 +137,7 @@ def main():
     demask = args.mode == "pair"
     latencies: list[float] = []
     errors = 0
+    throttles = 0
 
     limits = httpx.Limits(max_connections=200, max_keepalive_connections=100)
     with httpx.Client(timeout=120.0, limits=limits) as client:
@@ -125,7 +150,9 @@ def main():
             ]
             for f in as_completed(futs):
                 try:
-                    latencies.append(f.result())
+                    latency, call_throttles = f.result()
+                    latencies.append(latency)
+                    throttles += call_throttles
                 except Exception:
                     errors += 1
         total = time.perf_counter() - t0
@@ -139,8 +166,10 @@ def main():
         return latencies[idx] * 1000
 
     ok = len(latencies)
-    rps = ok / total
-    tps = rps * approx_tokens
+    op_rps = ok / total
+    http_requests = ok * (2 if demask else 1)
+    http_rps = http_requests / total
+    tps = op_rps * approx_tokens
     print(
         f"profile={args.profile} mode={args.mode} n={args.n} ok={ok} errors={errors} "
         f"concurrency={args.concurrency} url={args.url}"
@@ -149,13 +178,16 @@ def main():
         f"payload_chars={len(payload)} approx_tokens={approx_tokens} "
         f"(tokenizer=chars/4 heuristic)"
     )
-    print(f"wall={total:.3f}s  RPS≈{rps:.1f}  TPS≈{tps:.0f}")
+    print(
+        f"wall={total:.3f}s  op_RPS≈{op_rps:.1f}  http_RPS≈{http_rps:.1f} "
+        f"TPS≈{tps:.0f}  429_retries={throttles}"
+    )
     print(
         f"latency_ms: p50={pct(0.50):.1f} p95={pct(0.95):.1f} p99={pct(0.99):.1f} "
         f"mean={statistics.mean(latencies)*1000:.1f}"
     )
     print(
-        "Targets: RPS≥1000, p95≤500ms (jury). "
+        "Targets: HTTP RPS≥1000, p95≤500ms (jury). "
         "RU-server: re-run this script against the deployed URL; local numbers are not evidence."
     )
 

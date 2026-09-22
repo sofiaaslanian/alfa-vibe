@@ -1240,6 +1240,17 @@ PERSON_CLIENT_RE = re.compile(
     rf"\s*[»\"']?"
     rf"(?=[\s,.;:!?»\"']|$)"
 )
+# Long-text fast path: find only role anchors globally, then run the expensive
+# name grammar inside a bounded suffix. This preserves offsets/semantics while
+# avoiding repeated backtracking across hundreds of thousands of characters.
+PERSON_CLIENT_ANCHOR_RE = re.compile(
+    rf"(?<![А-Яа-яЁёA-Za-z])(?i:{_PERSON_ROLE_WORD})"
+)
+PERSON_CLIENT_SUFFIX_RE = re.compile(
+    rf"\s*[:\-—–]?\s*[«\"']?\s*"
+    rf"({_RU_FIO_2_3}|{_LAT_FIO})"
+    rf"\s*[»\"']?(?=[\s,.;:!?»\"']|$)"
+)
 # Free-text contact: capitalised name(s)
 PERSON_CONTACT_RE = re.compile(
     rf"(?<![А-Яа-яЁёA-Za-z])"
@@ -1419,8 +1430,19 @@ def detect_person_labelled(text: str) -> list[Finding]:
     for m in PERSON_JSON_CUSTOMER_RE.finditer(text):
         _add(m.start(1), m.end(1), 0.95, "person_json_customer_v2")
 
+    # PERSON_CLIENT_RE is disproportionately expensive on long repetitive
+    # support transcripts ("Клиент обратился..." repeated thousands of times).
+    if len(text) >= 16_384:
+        for anchor in PERSON_CLIENT_ANCHOR_RE.finditer(text):
+            suffix_end = min(len(text), anchor.end() + 120)
+            m = PERSON_CLIENT_SUFFIX_RE.match(text, anchor.end(), suffix_end)
+            if m:
+                _add(m.start(1), m.end(1), 0.9, "person_role_rule_v2")
+    else:
+        for m in PERSON_CLIENT_RE.finditer(text):
+            _add(m.start(1), m.end(1), 0.9, "person_role_rule_v2")
+
     for regex, score, det in (
-        (PERSON_CLIENT_RE, 0.9, "person_role_rule_v2"),
         (PERSON_CONTACT_RE, 0.88, "person_contact_rule_v2"),
         (PERSON_CALLED_FRONT_RE, 0.92, "person_called_front_rule_v2"),
     ):
@@ -1432,12 +1454,16 @@ def detect_person_labelled(text: str) -> list[Finding]:
         from_ya = bool(re.search(r"(?i)(?<![А-Яа-яЁёA-Za-z0-9])я\s*[:\-—–]?\s*$", cue))
         _add(m.start(1), m.end(1), 0.92, "person_called_rule_v2", from_ya=from_ya)
 
-    # «Иван Петров хочет оформить карту» — capital FIO + real banking intent
-    from app.pii.claims import has_banking_intent
+    # «Иван Петров хочет оформить карту» — capital FIO + real banking intent.
+    # Candidate-first is important for long texts: avoid scanning the whole
+    # payload once per banking-intent regex when there is no sentence-leading FIO.
+    banking_leads = list(PERSON_BANKING_LEAD_RE.finditer(text))
+    if banking_leads:
+        from app.pii.claims import has_banking_intent
 
-    if has_banking_intent(text, include_generic=False):
-        for m in PERSON_BANKING_LEAD_RE.finditer(text):
-            _add(m.start(1), m.end(1), 0.85, "person_banking_lead_v2")
+        if has_banking_intent(text, include_generic=False):
+            for m in banking_leads:
+                _add(m.start(1), m.end(1), 0.85, "person_banking_lead_v2")
 
     return out
 
@@ -1502,8 +1528,35 @@ RULE_DETECTORS = [
 ]
 
 
+# For long payloads, skip context detectors only when a mandatory lexical
+# anchor is absent. These hints are a performance gate, not a policy gate:
+# every listed detector's regex/role logic requires at least one hint below.
+_LONG_TEXT_HINTS = {
+    detect_address: ("ул.", "улиц", "просп", "переул", "шоссе", "бульвар", "набереж", "площад", "дом ", "д.", "кв.", "квартира", "адрес"),
+    detect_birth_date: ("рожден", "родил", "birth_date", "др"),
+    detect_passport_issue_date: ("выдан", "выдач"),
+    detect_passport: ("паспорт", "пасп.", "серия"),
+    detect_subdivision: ("подраздел",),
+    detect_driver_license: ("водительск", "удостоверен", "права", "ву", "в/у"),
+    detect_cvv: ("cvv", "cvc", "цвс", "код безопасности", "оборот", "сзади"),
+    detect_pin: ("pin", "пин"),
+    detect_snils: ("снилс", "страховой номер", "пенсион"),
+    detect_international_passport: ("загран", "заграничн"),
+    detect_oms: ("омс", "медицинск"),
+    detect_place_of_birth: ("место рожден", "родил", "рожден", "place of birth", "birth place"),
+    detect_citizenship: ("граждан", "citizen"),
+    detect_passport_issuer: ("выдан", "выдач", "выдавш"),
+    detect_cardholder_name: ("держател", "имя на карт", "embossed", "name on card", "cardholder"),
+}
+
+
 def detect_all_rules(text: str) -> list[Finding]:
     findings: list[Finding] = []
+    lower = text.lower() if len(text) >= 16_384 else None
     for detector in RULE_DETECTORS:
+        if lower is not None:
+            hints = _LONG_TEXT_HINTS.get(detector)
+            if hints and not any(hint in lower for hint in hints):
+                continue
         findings.extend(detector(text))
     return findings
