@@ -167,6 +167,22 @@ def should_skip_address(text: str, start: int, end: int) -> bool:
     return not is_personal_address_mention(text, start, end)
 
 
+def is_personal_inn_mention(text: str, start: int, end: int) -> bool:
+    """Keep valid INN unless the left context marks a non-personal role."""
+    from app.pii.claims import INN_PERSONAL_RE, INN_PUBLIC_RE
+
+    left_ctx = _left(text, start)
+    if INN_PERSONAL_RE.search(left_ctx):
+        return True
+    if INN_PUBLIC_RE.search(left_ctx):
+        return False
+    return True
+
+
+def should_skip_inn(text: str, start: int, end: int) -> bool:
+    return not is_personal_inn_mention(text, start, end)
+
+
 # ── Phone: personal contact vs bank support / public hotline ───────────────
 PHONE_PERSONAL_RE = re.compile(
     r"(?i)(?:"
