@@ -168,12 +168,14 @@ def should_skip_address(text: str, start: int, end: int) -> bool:
 
 
 def is_personal_inn_mention(text: str, start: int, end: int) -> bool:
-    """Checksum-valid INN is always client-format PII (format-first).
+    """Keep valid INN unless the left context marks a non-personal role."""
+    from app.pii.claims import INN_PERSONAL_RE, INN_PUBLIC_RE
 
-    Decoy labels («договор», «заказ», «ID операции») do not drop the span —
-    org scoring: miss costs more than excess mask. Detector already rejected
-    bad checksums.
-    """
+    left_ctx = _left(text, start)
+    if INN_PERSONAL_RE.search(left_ctx):
+        return True
+    if INN_PUBLIC_RE.search(left_ctx):
+        return False
     return True
 
 

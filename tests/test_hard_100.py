@@ -127,16 +127,18 @@ CASES = [
         "must_not_cover_values": [],  # second may or may not — discourse on INN keeps format-first
     },
     {
-        "id": "h17b_inn_operation_role_still_masked",
+        "id": "h17b_inn_operation_role_negative",
         "text": f"ID операции {INN}",
         "enabled_types": ["INN"],
-        "expected": [{"type": "INN", "value": INN, "match": "exact"}],
+        "expected": [],
+        "forbidden_types": ["INN"],
     },
     {
-        "id": "h18_card_order_still_masked",
+        "id": "h18_card_order_not_card",
         "text": "Номер заказа 4111111111111111",
         "enabled_types": ["PAYMENT_CARD"],
-        "expected": [{"type": "PAYMENT_CARD", "value": "4111111111111111", "match": "exact"}],
+        "expected": [],
+        "forbidden_types": ["PAYMENT_CARD"],
     },
     {
         "id": "h19_card_nbsp_groups",

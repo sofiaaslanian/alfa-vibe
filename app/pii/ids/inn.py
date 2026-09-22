@@ -1,14 +1,4 @@
-"""INN (person, 12 digits): format-first rules.
-
-Contract (jury: miss > excess mask):
-  1) Candidate = exactly 12 digits (not inside a longer digit run).
-  2) ФНС checksum must pass → MASK by default.
-  3) Label («ИНН», «договор», «заказ») does NOT drop a valid INN —
-     a checksum-valid 12-digit string is treated as person INN even under
-     a decoy label (org: excess masks are cheaper than misses).
-  4) Hard rejects: bad checksum, 10-digit org INN, spaced/fragmented forms
-     that are not a contiguous 12-digit token.
-"""
+"""INN detector matching the pre-group-1 baseline behavior."""
 
 from __future__ import annotations
 
@@ -16,17 +6,35 @@ import re
 
 from app.pii import checksums
 from app.pii.detect import Finding
-from app.pii.ids import has_any, left
+from app.pii.ids import has_any, left, neg_wins
 
 INN_RE = re.compile(r"(?<!\d)(\d{12})(?!\d)")
 
 INN_POS_HINTS = [
     r"\bинн\b",
     r"мой\s+инн",
-    r"инн\s+клиент",
+    r"инн\s+клиента",
     r"идентификационн\w*\s+номер\s+налогоплательщик",
-    r"\binn\b",
+    r"inn\b",
     r"taxpayer",
+]
+
+INN_NEG_ROLES = [
+    r"id\s+операц",
+    r"идентификатор\s+операц",
+    r"номер\s+договор",
+    r"номер\s+заказ",
+    r"заказ[ае]?\s*№",
+    r"номер\s+заявк",
+    r"номер\s+сч[её]т",
+    r"серийн\w*\s+код",
+    r"серийн\w*\s+номер",
+    r"артикул",
+    r"штрих[\-\s]?код",
+    r"barcode",
+    r"tracking",
+    r"трек[\-\s]?номер",
+    r"номер\s+посылк",
 ]
 
 
@@ -36,12 +44,17 @@ def validate_inn12(value: str) -> bool:
 
 def detect_inn(text: str) -> list[Finding]:
     out: list[Finding] = []
-    for m in INN_RE.finditer(text):
-        value = m.group(1)
+    for match in INN_RE.finditer(text):
+        value = match.group(1)
         if not validate_inn12(value):
             continue
-        score = 0.98
-        if has_any(left(text, m.start()), INN_POS_HINTS):
+        left_ctx = left(text, match.start())
+        if neg_wins(left_ctx, INN_NEG_ROLES, INN_POS_HINTS):
+            continue
+        score = 0.97
+        if has_any(left_ctx, INN_POS_HINTS):
             score = 0.995
-        out.append(Finding("INN", m.start(), m.end(), score, "inn_rule_v3"))
+        out.append(
+            Finding("INN", match.start(), match.end(), score, "inn_rule_v2")
+        )
     return out
