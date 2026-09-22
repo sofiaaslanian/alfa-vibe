@@ -153,7 +153,6 @@ def filter_findings(text: str, findings: list[Finding]) -> list[Finding]:
     from app.pii.discourse import (
         should_skip_address,
         should_skip_birth_date,
-        should_skip_inn,
         should_skip_person,
         should_skip_phone,
         should_skip_place_of_birth,
@@ -199,9 +198,6 @@ def filter_findings(text: str, findings: list[Finding]) -> list[Finding]:
     for f in findings:
         if id(f) in decided:
             out.append(decided[id(f)])
-            continue
-        if f.type == "INN" and should_skip_inn(text, f.start, f.end):
-            out.append(_allow(f))
             continue
         if f.type == "PHONE" and should_skip_phone(text, f.start, f.end):
             out.append(_allow(f))
