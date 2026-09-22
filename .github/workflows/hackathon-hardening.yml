@@ -29,6 +29,7 @@ jobs:
       STATE_HMAC_KEY: ci-hmac-key
       STATE_ENC_KEY: ci-enc-key
       PROCESS_CONCURRENCY: "48"
+      PROCESS_LOG_SAMPLE_RATE: "0"
       PROXY_API_KEYS: demo-key
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
