@@ -40,12 +40,30 @@ def test_personal_claims_masked(text, expected):
 
 
 def test_ner_mid_sentence_banking(monkeypatch):
-    """ML finds free-text FIO; discourse keeps it for banking, drops for poet."""
-    monkeypatch.setenv("NER_ENABLED", "1")
-    from app.pii.detect import get_ner
+    """Discourse policy is tested with deterministic NER findings, without ML deps."""
+    from app.pii.detect import Finding, get_ner
 
-    get_ner().enabled = True
-    get_ner().use_local = True
+    ner = get_ner()
+    ner.enabled = True
+    ner.use_local = False
+
+    def fake_detect(text: str) -> list[Finding]:
+        full_name = "Дмитрий Орлов" if "Дмитрий Орлов" in text else "Александр Пушкин"
+        first, last = full_name.split()
+        start = text.index(full_name)
+        return [
+            Finding("PERSON", start, start + len(first), 0.99, "ml", part="first"),
+            Finding(
+                "PERSON",
+                start + len(first) + 1,
+                start + len(full_name),
+                0.99,
+                "ml",
+                part="last",
+            ),
+        ]
+
+    monkeypatch.setattr(ner, "detect", fake_detect)
 
     keep = "Заявку на кредит подал Дмитрий Орлов, паспорт уже в системе."
     drop = "Поэт Александр Пушкин родился в Москве."
@@ -66,12 +84,27 @@ def test_ner_mid_sentence_banking(monkeypatch):
 
 
 def test_famous_name_allow_not_masked(monkeypatch):
-    monkeypatch.setenv("NER_ENABLED", "1")
-    from app.pii.detect import get_ner
+    from app.pii.detect import Finding, get_ner
     from app.masking import apply_dev_redact
 
-    get_ner().enabled = True
-    get_ner().use_local = True
+    ner = get_ner()
+    ner.enabled = True
+    ner.use_local = False
+
+    def fake_detect(text: str) -> list[Finding]:
+        tokens = ["Владимир", "владимирович", "Жириновский"]
+        parts = ["first", "middle", "last"]
+        findings = []
+        search_from = 0
+        for token, part in zip(tokens, parts):
+            start = text.index(token, search_from)
+            findings.append(
+                Finding("PERSON", start, start + len(token), 0.99, "ml", part=part)
+            )
+            search_from = start + len(token)
+        return findings
+
+    monkeypatch.setattr(ner, "detect", fake_detect)
     text = "Владимир владимирович Жириновский любит кофе"
     fs = detect_pii(text, enable_ner=True)
     persons = [f for f in fs if f.type == "PERSON"]

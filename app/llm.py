@@ -10,6 +10,9 @@ import httpx
 
 log = logging.getLogger("alfa.llm")
 
+DEFAULT_BASE_URL = "https://alfagen.alfabank.ru/continue-dev/"
+DEFAULT_MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
+
 
 class AlfaGenClient:
     """Обёртка над API AlfaGen (совместимо с OpenAI-контрактом)."""
@@ -18,12 +21,14 @@ class AlfaGenClient:
         self,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        model: str = "deepseek-v.4-flash",
+        model: Optional[str] = None,
         timeout: float = 30.0,
     ):
         self.api_key = api_key or os.getenv("ALFAGEN_API_KEY", "")
-        self.base_url = (base_url or os.getenv("ALFAGEN_BASE_URL", "https://alfagen.alfabank.ru/continue-dev/")).rstrip("/")
-        self.model = model or os.getenv("ALFAGEN_MODEL", "deepseek-v.4-flash")
+        self.base_url = (
+            base_url or os.getenv("ALFAGEN_BASE_URL", DEFAULT_BASE_URL)
+        ).rstrip("/")
+        self.model = model or os.getenv("ALFAGEN_MODEL", DEFAULT_MODEL)
         self.timeout = timeout
 
     def _headers(self) -> dict[str, str]:
