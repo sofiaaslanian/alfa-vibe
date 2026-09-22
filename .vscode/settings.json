@@ -1,0 +1,7 @@
+{
+  "files.exclude": {
+    "ui/icons": true,
+    "ui/photos": true,
+    "ui/photos-staging": true
+  }
+}
