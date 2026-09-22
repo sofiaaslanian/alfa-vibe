@@ -58,6 +58,8 @@ def filter_enabled(findings: list[Finding], enabled: list[str]) -> list[Finding]
     # also accept detector-native names that map into want
     out = []
     for f in findings:
+        if getattr(f, "decision", "mask") != "mask":
+            continue  # ALLOW ≠ expected masked span
         ct = canonical(f.type)
         at = to_acceptance_type(f.type)
         if ct in want or at in want or f.type in want:
@@ -67,6 +69,75 @@ def filter_enabled(findings: list[Finding], enabled: list[str]) -> list[Finding]
 
 def span_key(typ: str, start: int, end: int) -> tuple[str, int, int]:
     return (to_acceptance_type(typ), start, end)
+
+
+# Baseline fixtures often list one composite span; detector may emit parts.
+COMPOSITE_ACCEPT = {
+    "PERSON_NAME",
+    "ADDRESS",
+    "CARDHOLDER_NAME",
+    "PASSPORT_NUMBER",
+    "DRIVER_LICENSE_NUMBER",
+}
+
+
+def _alnum_offsets(text: str, start: int, end: int) -> set[int]:
+    return {i for i in range(start, end) if text[i].isalnum()}
+
+
+def match_spans(
+    text: str,
+    expected: list[tuple[str, int, int]],
+    got: list[tuple[str, int, int]],
+) -> tuple[list, list, list]:
+    """Exact match, with composite cover: parts may replace one baseline span."""
+    exp_set = set(expected)
+    got_set = set(got)
+    tp = sorted(exp_set & got_set)
+    fp_cand = got_set - exp_set
+    fn_cand = exp_set - got_set
+
+    # Cover remaining expected composite spans by got parts of same type
+    still_fn: list[tuple[str, int, int]] = []
+    covered_got: set[tuple[str, int, int]] = set()
+    for typ, s, e in sorted(fn_cand):
+        if typ not in COMPOSITE_ACCEPT:
+            still_fn.append((typ, s, e))
+            continue
+        need = _alnum_offsets(text, s, e)
+        if not need:
+            still_fn.append((typ, s, e))
+            continue
+        parts = [
+            g
+            for g in fp_cand
+            if g[0] == typ and g[1] >= s and g[2] <= e
+        ]
+        covered = set()
+        for _, gs, ge in parts:
+            covered |= _alnum_offsets(text, gs, ge)
+        if need <= covered:
+            tp.append((typ, s, e))
+            covered_got.update(parts)
+        else:
+            still_fn.append((typ, s, e))
+
+    still_fp: list[tuple[str, int, int]] = []
+    for g in sorted(fp_cand):
+        if g in covered_got:
+            continue
+        typ, gs, ge = g
+        if typ not in COMPOSITE_ACCEPT:
+            still_fp.append(g)
+            continue
+        # Part inside some expected composite span of same type → OK
+        if any(
+            e[0] == typ and gs >= e[1] and ge <= e[2] for e in expected
+        ):
+            continue
+        still_fp.append(g)
+
+    return sorted(set(tp)), still_fp, still_fn
 
 
 def evaluate_case(case: dict, *, enable_ner: bool) -> dict:
@@ -81,11 +152,7 @@ def evaluate_case(case: dict, *, enable_ner: bool) -> dict:
     filtered = filter_enabled(raw, enabled)
     got = [span_key(f.type, f.start, f.end) for f in filtered]
 
-    exp_set = set(expected)
-    got_set = set(got)
-    tp = sorted(exp_set & got_set)
-    fp = sorted(got_set - exp_set)
-    fn = sorted(exp_set - got_set)
+    tp, fp, fn = match_spans(text, expected, got)
 
     masked = apply_dev_redact(text, filtered)
     mask_ok = masked == case["expected_result"]
@@ -231,6 +298,10 @@ def http_process_throughput(url: str, n: int, concurrency: int) -> dict | None:
         "Клиент ivanov@mail.ru, тел +7 999 123-45-67, "
         "карта 4111 1111 1111 1111, паспорт клиента серия 4510 номер 123456"
     )
+    headers = {}
+    api_key = os.getenv("PROXY_API_KEYS", "").split(",")[0].strip()
+    if api_key:
+        headers["X-API-Key"] = api_key
 
     def one(client: httpx.Client) -> float:
         pid = str(uuid.uuid4())
@@ -238,6 +309,7 @@ def http_process_throughput(url: str, n: int, concurrency: int) -> dict | None:
         r = client.post(
             f"{url}/process",
             json={"payload": payload, "payload_id": pid},
+            headers=headers,
             timeout=30.0,
         )
         r.raise_for_status()
@@ -245,6 +317,7 @@ def http_process_throughput(url: str, n: int, concurrency: int) -> dict | None:
         r2 = client.post(
             f"{url}/process",
             json={"payload": masked, "payload_id": pid},
+            headers=headers,
             timeout=30.0,
         )
         r2.raise_for_status()

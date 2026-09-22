@@ -73,5 +73,5 @@ def test_client_pushkin_protected_poet_skipped():
     poet = "Александр Пушкин — русский поэт"
     c = detect_pii(client, enable_ner=False)
     p = detect_pii(poet, enable_ner=False)
-    assert any(x.type == "PERSON" for x in c)
-    assert not any(x.type == "PERSON" for x in p)
+    assert any(x.type == "PERSON" and getattr(x, "decision", "mask") == "mask" for x in c)
+    assert not any(x.type == "PERSON" and getattr(x, "decision", "mask") == "mask" for x in p)

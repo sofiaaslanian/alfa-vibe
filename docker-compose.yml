@@ -4,9 +4,17 @@ services:
   redis:
     image: redis:7-alpine
     container_name: alfa-redis
-    ports:
-      - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    # Not published to host — backend reaches redis:6379 on the compose network.
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--maxmemory",
+        "512mb",
+        "--maxmemory-policy",
+        "noeviction",
+      ]
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -26,7 +34,13 @@ services:
     environment:
       STORAGE_BACKEND: redis
       REDIS_URL: redis://redis:6379/0
-      NER_ENABLED: "0"
+      # Autotest load: keep NER off. Demo quality: NER_ENABLED=1 + ner deps.
+      NER_ENABLED: ${NER_ENABLED:-0}
+      NER_LOCAL: "1"
+      NER_FAIL_CLOSED: "0"
+      # Auth only for /proxy and /demo — /process is open for AlfaSonar.
+      PROXY_API_KEYS: ${PROXY_API_KEYS:-demo-key}
+      PROCESS_CONCURRENCY: ${PROCESS_CONCURRENCY:-180}
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
     depends_on:

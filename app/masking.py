@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from app.pii.detect import Finding
+from app.pii.detect import Finding, maskable
 
 # Map baseline canonical names <-> our detector types
 TYPE_ALIASES = {
@@ -45,6 +45,7 @@ def redact_chars(value: str) -> str:
 
 
 def apply_dev_redact(text: str, findings: list[Finding]) -> str:
+    findings = maskable(findings)
     if not findings:
         return text
     result = text
@@ -61,6 +62,7 @@ def make_scoped_token(pii_type: str) -> str:
 
 def apply_scoped_tokens(text: str, findings: list[Finding]) -> tuple[str, dict[str, str]]:
     """Returns masked text and token->original map."""
+    findings = maskable(findings)
     mapping: dict[str, str] = {}
     if not findings:
         return text, mapping

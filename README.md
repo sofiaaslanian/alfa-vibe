@@ -25,10 +25,12 @@ Docker-образ **без** torch (лёгкий). NER на RU только ес
 ```bash
 # mask
 curl -s localhost:8080/process -H 'Content-Type: application/json' \
+  -H 'X-API-Key: demo-key' \
   -d '{"payload":"Клиент ivanov@mail.ru","payload_id":"t1"}'
 
 # demask (тот же payload_id + masked строка)
 curl -s localhost:8080/process -H 'Content-Type: application/json' \
+  -H 'X-API-Key: demo-key' \
   -d '{"payload":"<masked>","payload_id":"t1"}'
 ```
 
@@ -42,7 +44,15 @@ uvicorn app.main:app --port 8080 --workers 2
 
 Или всё вместе: `docker compose up --build`.
 
+Redis в Compose **не** публикует `6379` наружу (только сеть `redis:6379` между сервисами).
+
 Контракт state: retry той же строки → та же маска; demask; чужой payload на том же id → **409**; истёкший seen → **410**.
+
+### Перед деплоем / сдачей ZIP
+
+1. Сгенерировать **новые** `STATE_HMAC_KEY` / `STATE_ENC_KEY` на сервере (ключи из любого переданного ZIP считать скомпрометированными).
+2. В архив — только исходники: `./scripts/pack_submission.sh` (`.env` не кладётся).
+3. Acceptance: `68/68` — внутренний набор; на слайде не писать «Precision 100% на данных Альфы».
 
 ## Demo proxy → AlfaGen
 
@@ -59,12 +69,18 @@ curl -s localhost:8080/proxy/chat \
 
 В LLM уходит только masked prompt (scoped tokens). Demask ответа — только если `allow_demask: true` у системы.
 
-| Система | Типы | demask | Назначение |
-|---|---|---|---|
-| `autotest` | все | да | `/process` |
-| `demo` | все | да | proxy демо |
-| `format_only` | email/phone/INN/card | нет | урезанный consumer |
-| `high_rps` | все кроме PERSON | да | нагрузка без NER |
+| Система | Типы | demask | NER | Назначение |
+|---|---|---|---|---|
+| `autotest` | все | да | нет | `/process` нагрузка |
+| `demo` | все + combo PIN/CVV↔карта | да | **RuBERT** | proxy / UI / ловушки |
+| `format_only` | email/phone/INN/card | нет | нет | урезанный consumer |
+| `high_rps` | все кроме PERSON | да | нет | нагрузка без NER |
+
+**ФИО:** RuBERT (`redmadrobot-rnd/rubert-base-pii-ner`) находит кандидатов в свободном тексте; **discourse** решает «клиент / меня зовут» vs «поэт Пушкин». Natasha не используется.  
+Включить локально: `pip install -r requirements-ner.txt` и `NER_ENABLED=1` в `.env`.  
+Бонус УЛ: `SNILS`, `INTERNATIONAL_PASSPORT`, `OMS`.  
+Combo на `demo`: PIN/CVV маскируются только вместе с `PAYMENT_CARD`.  
+Ловушки: `NER_ENABLED=1 python scripts/demo_traps.py` (или `0` — только rules).
 
 ## Перед RU (локальный gate)
 
@@ -90,13 +106,18 @@ STORAGE_BACKEND=memory NER_ENABLED=0 uvicorn app.main:app --port 8080 &
 
 - Prometheus: `GET /metrics` (Latency / RPS / TPS)
 - Ready: `GET /ready` (проверка state store)
-- NER только если `NER_ENABLED=1` **и** в типах системы есть `PERSON`
-- ФИО без NER: поля `ФИО:` / роль `Клиент Имя Фамилия`
-- Локальный smoke:
+- NER для **demo/proxy**: `NER_ENABLED=1` + `use_ner: true` (RuBERT → discourse: клиент vs знаменитость)
+- `/process` (autotest/high_rps): `use_ner: false` — RPS без ML
+- ФИО без NER (load): поля `ФИО:` / роль `Клиент Имя Фамилия`
+- Локальный smoke нагрузки:
   ```bash
   STORAGE_BACKEND=memory NER_ENABLED=0 uvicorn app.main:app --port 8080
   python scripts/load_smoke.py --n 500 --concurrency 50 --mode create
   python scripts/load_smoke.py --profile 100k --mode create --n 10 --concurrency 2
+  ```
+- Локальное демо с ML:
+  ```bash
+  STORAGE_BACKEND=memory NER_ENABLED=1 uvicorn app.main:app --port 8080
   ```
 - RU:
   ```bash

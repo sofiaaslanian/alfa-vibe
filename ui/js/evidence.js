@@ -20,30 +20,6 @@ async function loadEvidence() {
     live.avg_latency_ms != null ? `${live.avg_latency_ms.toFixed(1)} ms` : "—";
   document.getElementById("kpi-tokens").textContent = String(Math.round(live.tokens));
 
-  const acc = evidence.acceptance;
-  const accEl = document.getElementById("acceptance");
-  if (!acc) {
-    accEl.innerHTML = `<h2 class="pd-card__title">Correctness</h2><p class="pd-status">Нет acceptance_summary.json</p>`;
-  } else {
-    accEl.innerHTML = `
-      <h2 class="pd-card__title">Correctness — 68 acceptance</h2>
-      <div class="pd-kpi__value">${acc.cases_passed}/${acc.cases_total}
-        <span style="font-size:16px;color:var(--alfa-text-secondary);font-weight:500">
-          (${((acc.case_pass_rate || 0) * 100).toFixed(0)}%)
-        </span>
-      </div>
-      <p class="pd-status">span F1=${acc.span_metrics?.f1 ?? "—"} · mask=${acc.mask_accuracy ?? "—"} · round-trip=${acc.roundtrip_rate ?? "—"}</p>
-      <table class="table"><thead><tr><th>Тип</th><th>Pass</th><th>F1</th></tr></thead>
-      <tbody>
-        ${Object.entries(acc.by_type || {})
-          .map(
-            ([t, v]) =>
-              `<tr><td>${esc(t)}</td><td>${v.passed}/${v.cases}</td><td>${v.f1 ?? "—"}</td></tr>`
-          )
-          .join("")}
-      </tbody></table>`;
-  }
-
   document.getElementById("holdout").textContent =
     `Holdout cases: ${evidence.holdout?.cases ?? 0} · ${evidence.holdout?.note || ""}`;
 
@@ -98,5 +74,5 @@ async function loadEvidence() {
 }
 
 loadEvidence().catch((e) => {
-  document.getElementById("acceptance").textContent = e.message;
+  document.getElementById("holdout").textContent = e.message;
 });

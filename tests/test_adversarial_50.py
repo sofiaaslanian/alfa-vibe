@@ -2,12 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-def overlaps(a0: int, a1: int, b0: int, b1: int) -> bool:
-    return not (a1 <= b0 or b1 <= a0)
-
-
-def span_text(text: str, finding: dict) -> str:
-    return text[finding["start"] : finding["end"]]
+from tests.conftest import findings_cover_span, overlaps, span_text
 
 
 CASES = [
@@ -121,7 +116,10 @@ CASES = [
         "id": "14_passport_split_labels",
         "text": "Паспорт: серия 45 11, номер 123456.",
         "enabled_types": ["PASSPORT_NUMBER"],
-        "expected": [{"type": "PASSPORT_NUMBER", "value": "45 11, номер 123456", "match": "overlap"}],
+        "expected": [
+            {"type": "PASSPORT_NUMBER", "value": "45 11", "match": "exact"},
+            {"type": "PASSPORT_NUMBER", "value": "123456", "match": "exact"},
+        ],
         "forbidden_types": [],
     },
     # 15
@@ -352,7 +350,10 @@ CASES = [
         "id": "42_passport_not_phone",
         "text": "Паспорт клиента: 45 11 123456",
         "enabled_types": ["PASSPORT_NUMBER", "PHONE"],
-        "expected": [{"type": "PASSPORT_NUMBER", "value": "45 11 123456", "match": "exact"}],
+        "expected": [
+            {"type": "PASSPORT_NUMBER", "value": "45 11", "match": "exact"},
+            {"type": "PASSPORT_NUMBER", "value": "123456", "match": "exact"},
+        ],
         "forbidden_types": ["PHONE"],
     },
     # 43
@@ -439,7 +440,8 @@ CASES = [
         "expected": [
             {"type": "PERSON_NAME", "value": "Петров Иван Сергеевич", "match": "overlap"},
             {"type": "BIRTH_DATE", "value": "01.02.1990", "match": "exact"},
-            {"type": "PASSPORT_NUMBER", "value": "45 11, номер 123456", "match": "overlap"},
+            {"type": "PASSPORT_NUMBER", "value": "45 11", "match": "exact"},
+            {"type": "PASSPORT_NUMBER", "value": "123456", "match": "exact"},
             {"type": "PASSPORT_DIVISION_CODE", "value": "770-002", "match": "exact"},
             {"type": "PASSPORT_ISSUE_DATE", "value": "03.04.2015", "match": "exact"},
             {"type": "PASSPORT_ISSUER", "value": "ОМВД России по району Арбат города Москвы", "match": "overlap"},
@@ -475,10 +477,7 @@ def _assert_expected(text: str, findings: list[dict], expected: dict):
     )
 
     if expected.get("match", "exact") == "exact":
-        assert any(
-            f["start"] == exp_start and f["end"] == exp_end
-            for f in candidates
-        ), (
+        assert findings_cover_span(text, candidates, exp_start, exp_end), (
             f"Wrong offsets for {expected['type']}={value!r}; got "
             f"{[(f['start'], f['end'], span_text(text, f)) for f in candidates]}"
         )

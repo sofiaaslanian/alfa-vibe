@@ -12,7 +12,8 @@ models/
 docs/acceptance_eval_report.json
 app/**/__pycache__/
 tests/**/__pycache__/
-ui/icons/
+ui/icons/*
+!ui/icons/sparkle-*.png
 ui/photos/
 ui/fonts/
 ui/static/

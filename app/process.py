@@ -42,13 +42,66 @@ class ProcessService:
             allowed = self.config.default_pd_types or None
         return set(allowed) if allowed else None
 
+    def _combo_policy(self, system: Optional[str]) -> dict[str, list[str]]:
+        if system and system in self.config.systems:
+            sys_combo = self.config.systems[system].combo_require
+            if sys_combo:
+                return sys_combo
+        return self.config.combo_require or {}
+
+    @staticmethod
+    def _apply_combo(
+        findings: list[Finding], combo: dict[str, list[str]]
+    ) -> list[Finding]:
+        """Drop types that require co-occurring companions (e.g. PIN needs CARD)."""
+        if not combo:
+            return findings
+        present = {f.type for f in findings if getattr(f, "decision", "mask") == "mask"}
+        out: list[Finding] = []
+        for f in findings:
+            if getattr(f, "decision", "mask") != "mask":
+                out.append(f)
+                continue
+            needs = combo.get(f.type)
+            if not needs:
+                out.append(f)
+                continue
+            if any(t in present for t in needs):
+                out.append(f)
+        return out
+
+    def _ner_for_system(self, system: Optional[str], need_person: bool) -> bool:
+        """RuBERT only when explicitly enabled for the system (demo).
+
+        No X-System (AlfaSonar /process) → always rules-only for RPS.
+        """
+        if not need_person:
+            return False
+        if os.getenv("NER_ENABLED", "0") != "1":
+            return False
+        if not system:
+            return False
+        if system in self.config.systems:
+            flag = self.config.systems[system].use_ner
+            if flag is not None:
+                return flag
+        if system in {"autotest", "high_rps", "format_only"}:
+            return False
+        return system == "demo"
+
     def detect(self, text: str, system: Optional[str] = None) -> list[Finding]:
         allowed_set = self._allowed_types(system)
-        env_ner = os.getenv("NER_ENABLED", "0") == "1"
         need_person = allowed_set is None or bool(allowed_set & PERSON_TYPES)
-        findings = detect_pii(text, enable_ner=(env_ner and need_person))
+        findings = detect_pii(
+            text, enable_ner=self._ner_for_system(system, need_person)
+        )
         if allowed_set:
-            findings = [f for f in findings if f.type in allowed_set]
+            findings = [
+                f
+                for f in findings
+                if f.type in allowed_set or f.type == "REDACTED_SPAN"
+            ]
+        findings = self._apply_combo(findings, self._combo_policy(system))
         return findings
 
     def _aad(self, namespace: str, payload_id: str) -> str:

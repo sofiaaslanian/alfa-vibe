@@ -16,13 +16,26 @@ _aesgcm: AESGCM | None = None
 
 def _key_from_env(name: str) -> bytes:
     raw = os.getenv(name, "")
-    if raw:
-        try:
-            return bytes.fromhex(raw)
-        except ValueError:
-            return hashlib.sha256(raw.encode()).digest()
-    # ephemeral for local/dev — set STATE_HMAC_KEY / STATE_ENC_KEY in prod
-    return hashlib.sha256(f"dev-{name}".encode()).digest()
+    weak = (
+        not raw
+        or raw.startswith("change-me")
+        or raw in {"changeme", "secret", "password"}
+    )
+    if weak:
+        # Refuse predictable keys when Redis holds encrypted state.
+        if os.getenv("STORAGE_BACKEND", "memory") == "redis" and os.getenv(
+            "ALLOW_WEAK_STATE_KEYS", "0"
+        ) != "1":
+            raise RuntimeError(
+                f"{name} must be a strong secret when STORAGE_BACKEND=redis "
+                f"(got empty/placeholder). Set ALLOW_WEAK_STATE_KEYS=1 only for local demos."
+            )
+        # ephemeral for local/dev memory store
+        return hashlib.sha256(f"dev-{name}".encode()).digest()
+    try:
+        return bytes.fromhex(raw)
+    except ValueError:
+        return hashlib.sha256(raw.encode()).digest()
 
 
 def _hmac_key_cached() -> bytes:

@@ -17,15 +17,32 @@ class Finding:
     end: int
     score: float
     detector: str
+    # mask = protect; allow = seen but policy says leave open (famous / service)
+    decision: str = "mask"
+    reason: str = ""
+    # Composite structure part: first|middle|last|series|number|city|street|house|flat|…
+    part: str = ""
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "type": self.type,
             "start": self.start,
             "end": self.end,
             "score": self.score,
             "detector": self.detector,
         }
+        if self.decision != "mask":
+            d["decision"] = self.decision
+        if self.reason:
+            d["reason"] = self.reason
+        if self.part:
+            d["part"] = self.part
+        return d
+
+
+def maskable(findings: list[Finding]) -> list[Finding]:
+    """Findings that must be redacted (default decision=mask)."""
+    return [f for f in findings if getattr(f, "decision", "mask") == "mask"]
 
 
 PRIORITY = {
@@ -34,8 +51,11 @@ PRIORITY = {
     "PLACE_OF_BIRTH": 90,
     "CITIZENSHIP": 85,
     "PASSPORT": 80,
+    "INTERNATIONAL_PASSPORT": 79,
     "DRIVER_LICENSE": 78,
     "SUBDIVISION_CODE": 75,
+    "OMS": 74,
+    "SNILS": 73,
     "BIRTH_DATE": 70,
     "PASSPORT_ISSUE_DATE": 68,
     "PAYMENT_CARD": 65,
@@ -46,9 +66,18 @@ PRIORITY = {
     "PIN": 48,
     "ADDRESS": 40,
     "PERSON": 30,
+    "REDACTED_SPAN": 20,
 }
 
-FIXED_TOKENS = {"PERSON", "ADDRESS", "PLACE_OF_BIRTH", "CITIZENSHIP", "PASSPORT_ISSUER", "CARDHOLDER_NAME"}
+FIXED_TOKENS = {
+    "PERSON",
+    "ADDRESS",
+    "PLACE_OF_BIRTH",
+    "CITIZENSHIP",
+    "PASSPORT_ISSUER",
+    "CARDHOLDER_NAME",
+    "REDACTED_SPAN",
+}
 DEFAULT_MASKS = {
     "PHONE": "+7 XXX XXX-XX-XX",
     "INN": "XXXXXXXXXXXX",
@@ -59,49 +88,173 @@ DEFAULT_MASKS = {
     "CITIZENSHIP": "[CITIZENSHIP]",
     "PASSPORT_ISSUER": "[PASSPORT_ISSUER]",
     "CARDHOLDER_NAME": "[CARDHOLDER_NAME]",
+    "REDACTED_SPAN": "[REDACTED]",
     "BIRTH_DATE": "XX.XX.XXXX",
     "PASSPORT_ISSUE_DATE": "XX.XX.XXXX",
     "PASSPORT": "XXXX XXXXXX",
+    "INTERNATIONAL_PASSPORT": "XX XXXXXXX",
     "DRIVER_LICENSE": "XX XX XXXXXX",
     "SUBDIVISION_CODE": "XXX-XXX",
+    "SNILS": "XXX-XXX-XXX XX",
+    "OMS": "XXXXXXXXXXXXXXXX",
     "CVV": "XXX",
     "PIN": "XXXX",
 }
 
-PUBLIC_PERSON = re.compile(
-    r"(пушкин|лермонтов|толстой|достоевский|есенин)",
-    re.IGNORECASE,
-)
-
-
-def _window(text: str, start: int, end: int, size: int = 40) -> str:
-    return text[max(0, start - size) : min(len(text), end + size)]
+def _cluster_same_type(
+    findings: list[Finding],
+    typ: str,
+    text: str,
+    *,
+    max_gap: int = 3,
+) -> list[list[Finding]]:
+    """Group adjacent composite parts so discourse sees the full mention."""
+    items = sorted([f for f in findings if f.type == typ], key=lambda f: f.start)
+    if not items:
+        return []
+    clusters: list[list[Finding]] = [[items[0]]]
+    for f in items[1:]:
+        prev = clusters[-1][-1]
+        gap = text[prev.end : f.start]
+        if f.start - prev.end <= max_gap and all(
+            ch.isspace() or ch in ",.;:—–-" for ch in gap
+        ):
+            clusters[-1].append(f)
+        else:
+            clusters.append([f])
+    return clusters
 
 
 def filter_findings(text: str, findings: list[Finding]) -> list[Finding]:
+    """Eligibility: personal vs public/service/holiday for contextual types.
+
+    Skipped candidates stay as decision=allow so the UI can underline them
+    («Жириновский» найден, маскировать не нужно).
+
+    Composite parts (FIO tokens, address components) are judged as one cluster
+    so «Иванову Ивану» / «Москва, ул. …» share a single ALLOW/MASK decision.
+    """
+    from app.pii.discourse import (
+        should_skip_address,
+        should_skip_birth_date,
+        should_skip_inn,
+        should_skip_person,
+        should_skip_phone,
+        should_skip_place_of_birth,
+    )
+
+    ALLOW_REASON = {
+        "PERSON": "нет личного claim — знаменитость / третье лицо",
+        "ADDRESS": "служебный / публичный адрес",
+        "INN": "не клиентский ИНН",
+        "PHONE": "публичный / служебный номер",
+        "BIRTH_DATE": "не дата рождения клиента",
+        "PLACE_OF_BIRTH": "биография / не клиент",
+    }
+
+    def _allow(f: Finding) -> Finding:
+        return Finding(
+            f.type,
+            f.start,
+            f.end,
+            f.score,
+            f.detector,
+            decision="allow",
+            reason=ALLOW_REASON.get(f.type, "policy allow"),
+            part=getattr(f, "part", ""),
+        )
+
+    decided: dict[int, Finding] = {}  # id(f) → finding with decision
+
+    for typ, skip_fn in (
+        ("PERSON", should_skip_person),
+        ("ADDRESS", should_skip_address),
+    ):
+        for cluster in _cluster_same_type(findings, typ, text):
+            s, e = cluster[0].start, cluster[-1].end
+            if skip_fn(text, s, e):
+                for f in cluster:
+                    decided[id(f)] = _allow(f)
+            else:
+                for f in cluster:
+                    decided[id(f)] = f
+
     out: list[Finding] = []
     for f in findings:
-        ctx = _window(text, f.start, f.end)
-        if f.type == "PERSON" and PUBLIC_PERSON.search(ctx):
-            if re.search(r"поэт|писател|роман|стих", ctx, re.IGNORECASE):
-                continue
+        if id(f) in decided:
+            out.append(decided[id(f)])
+            continue
+        if f.type == "INN" and should_skip_inn(text, f.start, f.end):
+            out.append(_allow(f))
+            continue
+        if f.type == "PHONE" and should_skip_phone(text, f.start, f.end):
+            out.append(_allow(f))
+            continue
+        if f.type == "BIRTH_DATE" and should_skip_birth_date(text, f.start, f.end):
+            out.append(_allow(f))
+            continue
+        if f.type == "PLACE_OF_BIRTH" and should_skip_place_of_birth(text, f.start, f.end):
+            out.append(_allow(f))
+            continue
         out.append(f)
     return out
 
 
 def resolve_overlaps(findings: list[Finding]) -> list[Finding]:
+    """Priority wins on nesting; partial overlap → REDACTED_SPAN union (no PII tail).
+
+    ALLOW findings (famous / service) are kept as-is and do not merge into mask unions.
+    """
     if not findings:
         return []
+    allows = [f for f in findings if getattr(f, "decision", "mask") == "allow"]
+    mask_findings = [f for f in findings if getattr(f, "decision", "mask") != "allow"]
+    if not mask_findings:
+        return sorted(allows, key=lambda f: f.start)
+
     ordered = sorted(
-        findings,
+        mask_findings,
         key=lambda f: (-PRIORITY.get(f.type, 0), -(f.end - f.start), f.start),
     )
     accepted: list[Finding] = []
+
+    def _overlaps(a: Finding, b: Finding) -> bool:
+        return not (a.end <= b.start or a.start >= b.end)
+
     for cand in ordered:
-        if any(not (cand.end <= k.start or cand.start >= k.end) for k in accepted):
+        hits = [k for k in accepted if _overlaps(cand, k)]
+        if not hits:
+            accepted.append(cand)
             continue
-        accepted.append(cand)
-    return sorted(accepted, key=lambda f: f.start)
+        # Fully contained in an accepted span → drop
+        if any(k.start <= cand.start and cand.end <= k.end for k in hits):
+            continue
+        # Cand fully contains some accepted → replace those
+        contained = [k for k in hits if cand.start <= k.start and k.end <= cand.end]
+        if contained and len(contained) == len(hits):
+            accepted = [k for k in accepted if k not in contained]
+            accepted.append(cand)
+            continue
+        # Partial overlap → merge into REDACTED_SPAN covering the union
+        union_start = min([cand.start] + [k.start for k in hits])
+        union_end = max([cand.end] + [k.end for k in hits])
+        accepted = [k for k in accepted if k not in hits]
+        accepted.append(
+            Finding(
+                "REDACTED_SPAN",
+                union_start,
+                union_end,
+                min(cand.score, min(k.score for k in hits)),
+                "overlap_union",
+            )
+        )
+    # Drop ALLOW spans fully covered by a mask span (already protected).
+    out = list(accepted)
+    for a in allows:
+        if any(k.start <= a.start and a.end <= k.end for k in accepted):
+            continue
+        out.append(a)
+    return sorted(out, key=lambda f: f.start)
 
 
 def apply_masks(text: str, findings: list[Finding], token_style: bool = False) -> str:

@@ -1,16 +1,23 @@
 systems:
-  # Автотест /process — все типы, demask через state (не header)
+  # Автотест /process — rules-only (быстро под AlfaSonar RPS)
   autotest:
     enabled: true
     pd_types: []
     allow_demask: true
     mask_style: dev_redact
+    use_ner: false
 
   demo:
     enabled: true
     pd_types: []
     allow_demask: true
     mask_style: scoped_token
+    # RuBERT + discourse: ФИО в свободном тексте, Пушкин ≠ клиент
+    use_ner: true
+    # Bonus 3.7: PIN/CVV alone stay open; with card → mask.
+    combo_require:
+      PIN: [PAYMENT_CARD]
+      CVV: [PAYMENT_CARD]
 
   # Пример: только format-типы, без demask ответа LLM, без NER
   format_only:
@@ -18,13 +25,15 @@ systems:
     pd_types: [EMAIL, PHONE, INN, PAYMENT_CARD]
     allow_demask: false
     mask_style: scoped_token
+    use_ner: false
 
   # Высокий RPS: без PERSON → NER не вызывается
   high_rps:
     enabled: true
-    pd_types: [EMAIL, PHONE, INN, PAYMENT_CARD, ADDRESS, BIRTH_DATE, PASSPORT_ISSUE_DATE, PASSPORT, DRIVER_LICENSE, SUBDIVISION_CODE, CVV, PIN, PLACE_OF_BIRTH, CITIZENSHIP, PASSPORT_ISSUER, CARDHOLDER_NAME]
+    pd_types: [EMAIL, PHONE, INN, PAYMENT_CARD, ADDRESS, BIRTH_DATE, PASSPORT_ISSUE_DATE, PASSPORT, INTERNATIONAL_PASSPORT, DRIVER_LICENSE, SUBDIVISION_CODE, SNILS, OMS, CVV, PIN, PLACE_OF_BIRTH, CITIZENSHIP, PASSPORT_ISSUER, CARDHOLDER_NAME]
     allow_demask: true
     mask_style: dev_redact
+    use_ner: false
 
   disabled_example:
     enabled: false
@@ -41,8 +50,11 @@ default_pd_types:
   - BIRTH_DATE
   - PASSPORT_ISSUE_DATE
   - PASSPORT
+  - INTERNATIONAL_PASSPORT
   - DRIVER_LICENSE
   - SUBDIVISION_CODE
+  - SNILS
+  - OMS
   - CVV
   - PIN
   - PERSON
@@ -50,6 +62,10 @@ default_pd_types:
   - CITIZENSHIP
   - PASSPORT_ISSUER
   - CARDHOLDER_NAME
+
+# Global combo empty — autotest/acceptance mask PIN/CVV alone.
+# Enable per-system (see demo.combo_require) for bonus 3.7.
+combo_require: {}
 
 pd_rules:
   - id: EMAIL
@@ -84,12 +100,24 @@ pd_rules:
     name: Серия и номер паспорта
     patterns: []
     mask: "dev_redact"
+  - id: INTERNATIONAL_PASSPORT
+    name: Загранпаспорт
+    patterns: []
+    mask: "dev_redact"
   - id: DRIVER_LICENSE
     name: Водительское удостоверение
     patterns: []
     mask: "dev_redact"
   - id: SUBDIVISION_CODE
     name: Код подразделения
+    patterns: []
+    mask: "dev_redact"
+  - id: SNILS
+    name: СНИЛС
+    patterns: []
+    mask: "dev_redact"
+  - id: OMS
+    name: Полис ОМС
     patterns: []
     mask: "dev_redact"
   - id: CVV

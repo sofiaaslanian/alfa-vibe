@@ -24,8 +24,16 @@ def test_card_luhn():
     assert len(f) == 1 and f[0].type == "PAYMENT_CARD"
 
 
-def test_card_invalid_luhn():
-    assert rules.detect_card("Карта 4111 1111 1111 1112") == []
+def test_card_invalid_luhn_without_keyword():
+    # Bare invalid PAN must not match.
+    assert rules.detect_card("Идентификатор 4111 1111 1111 1112") == []
+
+
+def test_card_invalid_luhn_with_keyword_fallback():
+    # Cloud.ru-style: after «карта» typo PAN still protected.
+    f = rules.detect_card("Карта 4111 1111 1111 1112")
+    assert len(f) == 1 and f[0].type == "PAYMENT_CARD"
+    assert f[0].detector == "card_rule_no_luhn_v1"
 
 
 def _make_valid_inn12() -> str:
@@ -51,11 +59,14 @@ def test_pipeline_format_mix():
 
 
 def test_passport_context():
-    # labelled series/number → one span covering both
+    # labelled series/number → two digit spans (no «номер» service word)
     text = "Паспорт клиента: серия 4510, номер 123456"
     f = rules.detect_passport(text)
-    assert len(f) == 1
-    assert text[f[0].start : f[0].end] == "4510, номер 123456"
+    assert len(f) >= 2
+    vals = {text[x.start : x.end] for x in f}
+    assert "4510" in vals
+    assert "123456" in vals
+    assert all("номер" not in text[x.start : x.end] for x in f)
     assert rules.detect_passport("Номер заказа: 4510 123456") == []
 
 
@@ -81,3 +92,9 @@ def test_textual_dates_and_negatives():
 def test_cvv_requires_anchor():
     assert rules.detect_cvv("код офиса: 123") == []
     assert len(rules.detect_cvv("CVV карты: 123")) == 1
+    assert len(rules.detect_cvv("мой CVC код 532")) == 1
+    assert rules.detect_cvv("мой CVC код 532")[0].start == (
+        "мой CVC код 532".index("532")
+    )
+    assert len(rules.detect_cvv("CVC: 532")) == 1
+    assert rules.detect_cvv("заказ код 532") == []

@@ -19,12 +19,55 @@ DETECT_TO_JURY = {
 JURY_TO_DETECT = {v: k for k, v in DETECT_TO_JURY.items()}
 
 
+def joined_mask_vals(text: str, typ: str, *, enable_ner: bool = False) -> list[str]:
+    """Reconstruct composite mentions from adjacent part-findings."""
+    fs = sorted(
+        [
+            f
+            for f in detect_pii(text, enable_ner=enable_ner)
+            if f.type == typ and getattr(f, "decision", "mask") == "mask"
+        ],
+        key=lambda f: f.start,
+    )
+    if not fs:
+        return []
+    groups: list[list] = [[fs[0]]]
+    for f in fs[1:]:
+        prev = groups[-1][-1]
+        gap = text[prev.end : f.start]
+        if f.start - prev.end <= 3 and all(ch.isspace() or ch in ",.;:—–-" for ch in gap):
+            groups[-1].append(f)
+        else:
+            groups.append([f])
+    return [text[g[0].start : g[-1].end] for g in groups]
+
+
 def overlaps(a0: int, a1: int, b0: int, b1: int) -> bool:
     return not (a1 <= b0 or b1 <= a0)
 
 
 def span_text(text: str, finding: dict) -> str:
     return text[finding["start"] : finding["end"]]
+
+
+def alnum_offsets(text: str, start: int, end: int) -> set[int]:
+    return {i for i in range(start, end) if text[i].isalnum()}
+
+
+def findings_cover_span(
+    text: str, findings: list[dict], start: int, end: int
+) -> bool:
+    """True if one exact span or several parts cover all alphanumerics in [start,end)."""
+    need = alnum_offsets(text, start, end)
+    if not need:
+        return False
+    if any(f["start"] == start and f["end"] == end for f in findings):
+        return True
+    covered: set[int] = set()
+    for f in findings:
+        if f["start"] >= start and f["end"] <= end:
+            covered |= alnum_offsets(text, f["start"], f["end"])
+    return need <= covered
 
 
 def _to_jury_type(t: str) -> str:
@@ -49,6 +92,8 @@ def detect():
         want = _want_types(enabled_types)
         out = []
         for f in findings:
+            if getattr(f, "decision", "mask") != "mask":
+                continue  # ALLOW = noticed UI-only, not a masked FP
             if want is not None and f.type not in want and _to_jury_type(f.type) not in want:
                 continue
             d = f.to_dict()

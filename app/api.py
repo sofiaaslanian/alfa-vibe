@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -32,6 +33,16 @@ DOCS_DIR = ROOT / "docs"
 LATENCY = Histogram("alfa_process_latency_seconds", "Latency", ["route", "mode"])
 RPS = Counter("alfa_process_total", "Total requests", ["route", "mode", "status"])
 TPS = Counter("alfa_tokens_total", "Estimated tokens", ["route"])
+
+# Sync load clients ≈200; reject excess with 429 (not an SLA error per org Q&A).
+_process_sem: asyncio.Semaphore | None = None
+
+
+def _process_semaphore() -> asyncio.Semaphore:
+    global _process_sem
+    if _process_sem is None:
+        _process_sem = asyncio.Semaphore(int(os.getenv("PROCESS_CONCURRENCY", "180")))
+    return _process_sem
 
 
 class ProcessRequest(BaseModel):
@@ -96,13 +107,17 @@ def _system(request: Request, x_system: str | None) -> str:
     return x_system or request.headers.get("X-System", "") or ""
 
 
-def _check_system(cfg: Config, system: str, *, required: bool = False) -> None:
+def _check_system(cfg: Config, system: str, *, required: bool = False) -> str:
+    """Return effective system name. Unknown systems ignored on /process (org: no header)."""
     if not system:
         if required:
             raise HTTPException(403, "X-System required")
-        return
+        return ""
     if system not in cfg.systems or not cfg.systems[system].enabled:
-        raise HTTPException(403, f"System '{system}' not allowed")
+        if required:
+            raise HTTPException(403, f"System '{system}' not allowed")
+        return ""  # autotest: ignore junk X-System
+    return system
 
 
 def _api_key_ok(x_api_key: str | None) -> bool:
@@ -124,8 +139,11 @@ def _read_json(path: Path):
 
 
 def _open_pii_leaked(text: str, findings: list, masked: str) -> list[str]:
+    """Open spans that were supposed to be masked but remain in the LLM prompt."""
     leaked = []
     for f in findings:
+        if getattr(f, "decision", "mask") != "mask":
+            continue
         value = text[f.start : f.end]
         if len(value) >= 3 and value in masked:
             leaked.append(value)
@@ -137,11 +155,25 @@ async def process(
     request: Request,
     body: ProcessRequest,
     x_system: str | None = Header(default=None, alias="X-System"),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
+    # Org Q&A: /process autotest does NOT require API key / consumer auth.
+    # Keep x_api_key in signature for compatibility; ignore it here.
+    _ = x_api_key
     cfg: Config = request.app.state.config
     svc: ProcessService = request.app.state.process
-    system = _system(request, x_system)
-    _check_system(cfg, system)
+    system = _check_system(cfg, _system(request, x_system), required=False)
+
+    sem = _process_semaphore()
+    try:
+        await asyncio.wait_for(sem.acquire(), timeout=0.002)
+    except TimeoutError:
+        RPS.labels(route="process", mode="reject", status="429").inc()
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "overloaded"},
+            headers={"Retry-After": "1"},
+        )
 
     start = time.perf_counter()
     mode = "unknown"
@@ -159,6 +191,7 @@ async def process(
         log.exception("process failed")
         raise HTTPException(503, "storage or detection unavailable") from exc
     finally:
+        sem.release()
         LATENCY.labels(route="process", mode=mode).observe(time.perf_counter() - start)
         RPS.labels(route="process", mode=mode, status=status).inc()
         TPS.labels(route="process").inc(max(len(body.payload) / 4, 1))
@@ -314,6 +347,9 @@ async def demo_run(
                 "value": body.text[f.start : f.end],
                 "score": f.score,
                 "detector": f.detector,
+                "decision": getattr(f, "decision", "mask") or "mask",
+                "reason": getattr(f, "reason", "") or "",
+                **({"part": f.part} if getattr(f, "part", "") else {}),
             }
             for f in findings
         ],

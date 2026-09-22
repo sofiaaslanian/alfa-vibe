@@ -29,6 +29,10 @@ class SystemConfig:
     pd_types: list[str] = field(default_factory=list)   # id типов ПД; пусто = все
     allow_demask: bool = True
     mask_style: str = "default"  # default | token | synthetic
+    # type → list of co-required types (bonus: PIN alone off, PIN+CARD on)
+    combo_require: dict[str, list[str]] = field(default_factory=dict)
+    # None = follow NER_ENABLED; True/False = force for this system
+    use_ner: bool | None = None
 
 
 @dataclass
@@ -37,6 +41,8 @@ class Config:
     pd_rules: dict[str, PDRule]
     default_pd_types: list[str]
     storage_backend: str = "memory"
+    # Global combo policy (overridden per-system if set)
+    combo_require: dict[str, list[str]] = field(default_factory=dict)
 
 
 def _rule_from_dict(data: dict[str, Any]) -> PDRule:
@@ -51,12 +57,17 @@ def _rule_from_dict(data: dict[str, Any]) -> PDRule:
 
 
 def _system_from_dict(name: str, data: dict[str, Any]) -> SystemConfig:
+    use_ner = data.get("use_ner", None)
+    if use_ner is not None:
+        use_ner = bool(use_ner)
     return SystemConfig(
         name=name,
         enabled=data.get("enabled", True),
         pd_types=data.get("pd_types", []),
         allow_demask=data.get("allow_demask", True),
         mask_style=data.get("mask_style", "default"),
+        combo_require=dict(data.get("combo_require") or {}),
+        use_ner=use_ner,
     )
 
 
@@ -71,4 +82,5 @@ def load_config(path: str = "config.yaml") -> Config:
         pd_rules=rules,
         default_pd_types=raw.get("default_pd_types", list(rules.keys())),
         storage_backend=raw.get("storage_backend", "memory"),
+        combo_require=dict(raw.get("combo_require") or {}),
     )

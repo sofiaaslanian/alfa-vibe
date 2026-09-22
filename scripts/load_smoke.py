@@ -18,6 +18,7 @@ Profiles:
 from __future__ import annotations
 
 import argparse
+import os
 import statistics
 import time
 import uuid
@@ -68,10 +69,15 @@ def one_call(
     demask: bool,
 ) -> float:
     pid = str(uuid.uuid4())
+    headers = {}
+    api_key = os.getenv("PROXY_API_KEYS", "").split(",")[0].strip()
+    if api_key:
+        headers["X-API-Key"] = api_key
     t0 = time.perf_counter()
     r = client.post(
         f"{url}/process",
         json={"payload": payload, "payload_id": pid},
+        headers=headers,
     )
     r.raise_for_status()
     if demask:
@@ -79,6 +85,7 @@ def one_call(
         r2 = client.post(
             f"{url}/process",
             json={"payload": masked, "payload_id": pid},
+            headers=headers,
         )
         r2.raise_for_status()
     return time.perf_counter() - t0
