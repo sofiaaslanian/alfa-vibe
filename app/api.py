@@ -25,8 +25,7 @@ from app.masking import restore_scoped_tokens
 from app.process import ProcessError, ProcessService
 from app.state import build_store
 
-log = logging.getLogger("alfa.api")
-log.setLevel(logging.INFO)
+log = logging.getLogger("uvicorn.error")
 
 ROOT = Path(__file__).resolve().parents[1]
 UI_DIR = ROOT / "ui"
