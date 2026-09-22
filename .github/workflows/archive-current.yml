@@ -1,8 +1,8 @@
 name: archive-current
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [fix/quality-only-score-recovery]
 
 jobs:
   archive:
