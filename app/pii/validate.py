@@ -15,7 +15,6 @@ def _digits(value: str) -> str:
 
 def accept_format_finding(text: str, finding: Finding) -> bool:
     """Validate ML spans outside experimental group 1."""
-    _ = text
     value = text[finding.start : finding.end]
 
     if finding.type == "CVV":
