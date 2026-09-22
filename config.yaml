@@ -1,0 +1,83 @@
+systems:
+  demo:
+    enabled: true
+    pd_types: []   # empty = all default_pd_types
+    allow_demask: true
+    mask_style: default
+  token_demo:
+    enabled: true
+    pd_types: []
+    allow_demask: true
+    mask_style: token
+
+default_pd_types:
+  - EMAIL
+  - PHONE
+  - INN
+  - PAYMENT_CARD
+  - ADDRESS
+  - BIRTH_DATE
+  - PASSPORT_ISSUE_DATE
+  - PASSPORT
+  - DRIVER_LICENSE
+  - SUBDIVISION_CODE
+  - CVV
+  - PIN
+  - PERSON
+
+# Legacy yaml rules kept for /pd-types introspection; detection uses app/pii/rules.
+pd_rules:
+  - id: EMAIL
+    name: Email
+    patterns: []
+    mask: "XXXXXXXX"
+  - id: PHONE
+    name: Номер телефона
+    patterns: []
+    mask: "+7 XXX XXX-XX-XX"
+  - id: INN
+    name: ИНН
+    patterns: []
+    mask: "XXXXXXXXXXXX"
+  - id: PAYMENT_CARD
+    name: Номер карты
+    patterns: []
+    mask: "XXXX XXXX XXXX XXXX"
+  - id: ADDRESS
+    name: Адрес
+    patterns: []
+    mask: "[ADDRESS]"
+  - id: BIRTH_DATE
+    name: Дата рождения
+    patterns: []
+    mask: "XX.XX.XXXX"
+  - id: PASSPORT_ISSUE_DATE
+    name: Дата выдачи паспорта
+    patterns: []
+    mask: "XX.XX.XXXX"
+  - id: PASSPORT
+    name: Серия и номер паспорта
+    patterns: []
+    mask: "XXXX XXXXXX"
+  - id: DRIVER_LICENSE
+    name: Водительское удостоверение
+    patterns: []
+    mask: "XX XX XXXXXX"
+  - id: SUBDIVISION_CODE
+    name: Код подразделения
+    patterns: []
+    mask: "XXX-XXX"
+  - id: CVV
+    name: CVV
+    patterns: []
+    mask: "XXX"
+  - id: PIN
+    name: PIN
+    patterns: []
+    mask: "XXXX"
+  - id: PERSON
+    name: ФИО
+    patterns: []
+    mask: "[PERSON]"
+
+storage_backend: memory
