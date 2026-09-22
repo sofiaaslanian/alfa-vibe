@@ -1121,11 +1121,11 @@
         "INN_PERSON"
       ],
       "kind": "hard_negative",
-      "payload": "Номер договора: 123456789047",
+      "payload": "ИНН организации: 7707083893",
       "expected_findings": [],
-      "expected_result": "Номер договора: 123456789047",
+      "expected_result": "ИНН организации: 7707083893",
       "mask_strategy": "dev_redact_v1",
-      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "reason": "10-значный ИНН юрлица — не INN_PERSON (нужен 12 + checksum)",
       "status": "Не запускался"
     },
     {
@@ -1191,11 +1191,11 @@
         "PAYMENT_CARD"
       ],
       "kind": "hard_negative",
-      "payload": "Идентификатор операции: 4111111111111111",
+      "payload": "Код в логе: 4111 1111 1111 1112",
       "expected_findings": [],
-      "expected_result": "Идентификатор операции: 4111111111111111",
+      "expected_result": "Код в логе: 4111 1111 1111 1112",
       "mask_strategy": "dev_redact_v1",
-      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "reason": "Невалидный Luhn без card-keyword рядом — не PAN",
       "status": "Не запускался"
     },
     {

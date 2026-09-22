@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import re
 
-from app.pii import checksums
 from app.pii.detect import Finding
 
 _EMAIL_OK_RE = re.compile(
@@ -70,19 +69,18 @@ def accept_format_finding(text: str, f: Finding) -> bool:
         return True
 
     if f.type == "INN":
-        d = _digits(value)
-        if len(d) == 12:
-            return checksums.inn12(d)
-        if len(d) == 10:
-            return checksums.inn10(d)
-        return False
+        from app.pii.ids.inn import validate_inn12
+
+        return validate_inn12(value)
 
     if f.type == "PAYMENT_CARD":
+        from app.pii.ids.card import validate_card_digits
+
         d = _digits(value)
         if not (13 <= len(d) <= 19):
             return False
         # Strict Luhn for ML / residual spans — no keyword bypass here.
-        return checksums.luhn(d)
+        return validate_card_digits(d)
 
     if f.type == "PHONE":
         d = _digits(value)

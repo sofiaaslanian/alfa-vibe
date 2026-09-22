@@ -121,14 +121,27 @@ def test_inn_with_label_and_newline():
 @pytest.mark.parametrize(
     "text",
     [
-        "Номер договора: 123456789047",
         "ИНН клиента: 123456789048",  # bad checksum
-        "номер заказа 123456789047",
-        "артикул 123456789047",
+        "ИНН организации: 7707083893",  # 10-digit org
+        "код 123456789048",  # bad checksum freeform
     ],
 )
 def test_inn_negatives(text):
     assert _vals(text, "INN") == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Номер договора: 123456789047",
+        "номер заказа 123456789047",
+        "артикул 123456789047",
+        "ID операции 123456789047",
+    ],
+)
+def test_inn_valid_under_decoy_label(text):
+    """Checksum-valid 12 digits → mask even if labelled заказ/договор."""
+    assert _vals(text, "INN") == ["123456789047"]
 
 
 # ── PAYMENT_CARD ───────────────────────────────────────────────────────────
@@ -151,14 +164,25 @@ def test_card_freeform_positive(text, expected):
 @pytest.mark.parametrize(
     "text",
     [
-        "Идентификатор операции: 4111111111111111",
-        "Номер карты клиента: 4111 1111 1111 1112",  # bad Luhn
-        "номер заказа 4111111111111111",
-        "артикул 4111111111111111",
+        "Номер карты клиента: 4111 1111 1111 1112",  # bad Luhn, keyword not immediate
+        "Код в логе: 4111 1111 1111 1112",  # bad Luhn bare
     ],
 )
 def test_card_negatives(text):
     assert _vals(text, "PAYMENT_CARD") == []
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Идентификатор операции: 4111111111111111", "4111111111111111"),
+        ("номер заказа 4111111111111111", "4111111111111111"),
+        ("артикул 4111111111111111", "4111111111111111"),
+    ],
+)
+def test_card_luhn_under_decoy_label(text, expected):
+    """Luhn-valid PAN → mask even under заказ/операция."""
+    assert expected in _vals(text, "PAYMENT_CARD")
 
 
 def test_format_mix_chat_style():
