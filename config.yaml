@@ -1,14 +1,29 @@
 systems:
-  demo:
-    enabled: true
-    pd_types: []   # empty = all default_pd_types
-    allow_demask: true
-    mask_style: default
-  token_demo:
+  # Автотест /process — все типы, demask через state (не header)
+  autotest:
     enabled: true
     pd_types: []
     allow_demask: true
-    mask_style: token
+    mask_style: dev_redact
+
+  demo:
+    enabled: true
+    pd_types: []
+    allow_demask: true
+    mask_style: scoped_token
+
+  # Пример: только format-типы, без demask ответа LLM
+  format_only:
+    enabled: true
+    pd_types: [EMAIL, PHONE, INN, PAYMENT_CARD]
+    allow_demask: false
+    mask_style: scoped_token
+
+  disabled_example:
+    enabled: false
+    pd_types: []
+    allow_demask: false
+    mask_style: scoped_token
 
 default_pd_types:
   - EMAIL
@@ -25,59 +40,58 @@ default_pd_types:
   - PIN
   - PERSON
 
-# Legacy yaml rules kept for /pd-types introspection; detection uses app/pii/rules.
 pd_rules:
   - id: EMAIL
     name: Email
     patterns: []
-    mask: "XXXXXXXX"
+    mask: "dev_redact"
   - id: PHONE
     name: Номер телефона
     patterns: []
-    mask: "+7 XXX XXX-XX-XX"
+    mask: "dev_redact"
   - id: INN
     name: ИНН
     patterns: []
-    mask: "XXXXXXXXXXXX"
+    mask: "dev_redact"
   - id: PAYMENT_CARD
     name: Номер карты
     patterns: []
-    mask: "XXXX XXXX XXXX XXXX"
+    mask: "dev_redact"
   - id: ADDRESS
     name: Адрес
     patterns: []
-    mask: "[ADDRESS]"
+    mask: "dev_redact"
   - id: BIRTH_DATE
     name: Дата рождения
     patterns: []
-    mask: "XX.XX.XXXX"
+    mask: "dev_redact"
   - id: PASSPORT_ISSUE_DATE
     name: Дата выдачи паспорта
     patterns: []
-    mask: "XX.XX.XXXX"
+    mask: "dev_redact"
   - id: PASSPORT
     name: Серия и номер паспорта
     patterns: []
-    mask: "XXXX XXXXXX"
+    mask: "dev_redact"
   - id: DRIVER_LICENSE
     name: Водительское удостоверение
     patterns: []
-    mask: "XX XX XXXXXX"
+    mask: "dev_redact"
   - id: SUBDIVISION_CODE
     name: Код подразделения
     patterns: []
-    mask: "XXX-XXX"
+    mask: "dev_redact"
   - id: CVV
     name: CVV
     patterns: []
-    mask: "XXX"
+    mask: "dev_redact"
   - id: PIN
     name: PIN
     patterns: []
-    mask: "XXXX"
+    mask: "dev_redact"
   - id: PERSON
     name: ФИО
     patterns: []
-    mask: "[PERSON]"
+    mask: "dev_redact"
 
 storage_backend: memory

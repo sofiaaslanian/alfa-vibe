@@ -1,3 +1,3 @@
-"""Точка входа: uvicorn app.main:app"""
+"""Entry point: uvicorn app.main:app"""
 
-from app.api.server import app  # noqa: F401
+from app.api import app  # noqa: F401

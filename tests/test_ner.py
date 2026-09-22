@@ -4,8 +4,8 @@ import os
 
 import pytest
 
-from app.pii.ner.mapper import map_entity, merge_adjacent_person
-from app.pii.contract import Finding
+from app.pii.detect import Finding
+from app.pii.ner import map_entity, merge_adjacent_person
 
 
 def test_map_name_parts():
@@ -29,28 +29,19 @@ def test_merge_ivan_petrov():
 
 @pytest.mark.ner
 def test_rubert_fio_live():
-    """Requires transformers + model download. Skip if NER deps missing."""
     pytest.importorskip("transformers")
     os.environ["NER_ENABLED"] = "1"
     os.environ["NER_LOCAL"] = "1"
     os.environ["NER_FAIL_CLOSED"] = "0"
+    import app.pii.detect as detect_mod
 
-    # reset singleton
-    import app.pii.pipeline as pipeline
-
-    pipeline._ner = None
-
-    from app.pii.pipeline import detect_pii
+    detect_mod._ner = None
+    from app.pii.detect import detect_pii
 
     text = "Меня зовут Иван Петров, я живу в Москве."
-    findings = detect_pii(text, enable_ner=True)
-    persons = [f for f in findings if f.type == "PERSON"]
-    assert persons, f"expected PERSON in {findings}"
+    persons = [f for f in detect_pii(text, enable_ner=True) if f.type == "PERSON"]
+    assert persons
     span = text[persons[0].start : persons[0].end]
     assert "Иван" in span and "Петров" in span
-
-    # poet trap still not masked as client PII context... eligibility may keep or drop
     poet = detect_pii("Александр Пушкин — русский поэт", enable_ner=True)
-    poet_persons = [f for f in poet if f.type == "PERSON"]
-    # if model tags it, eligibility should drop due to «поэт»
-    assert poet_persons == []
+    assert not any(f.type == "PERSON" for f in poet)

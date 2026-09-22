@@ -1,0 +1,1210 @@
+{
+  "version": "baseline_v1",
+  "scope": "target-type-only fixtures; not official answers or holdout",
+  "offset_unit": "unicode_code_point",
+  "mask_strategy": "dev_redact_v1",
+  "cases": [
+    {
+      "id": "PERSON_NAME_1",
+      "target_type": "PERSON_NAME",
+      "enabled_types": [
+        "PERSON_NAME"
+      ],
+      "kind": "positive",
+      "payload": "ФИО клиента: Иванов Иван Иванович",
+      "expected_findings": [
+        {
+          "type": "PERSON_NAME",
+          "start": 13,
+          "end": 33,
+          "value": "Иванов Иван Иванович"
+        }
+      ],
+      "expected_result": "ФИО клиента: ****** **** ********",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PERSON_NAME_2",
+      "target_type": "PERSON_NAME",
+      "enabled_types": [
+        "PERSON_NAME"
+      ],
+      "kind": "variant_positive",
+      "payload": "Клиент Петрова Анна просит ответить.",
+      "expected_findings": [
+        {
+          "type": "PERSON_NAME",
+          "start": 7,
+          "end": 19,
+          "value": "Петрова Анна"
+        }
+      ],
+      "expected_result": "Клиент ******* **** просит ответить.",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PERSON_NAME_3",
+      "target_type": "PERSON_NAME",
+      "enabled_types": [
+        "PERSON_NAME"
+      ],
+      "kind": "hard_negative",
+      "payload": "Александр Пушкин — русский поэт",
+      "expected_findings": [],
+      "expected_result": "Александр Пушкин — русский поэт",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PERSON_NAME_4",
+      "target_type": "PERSON_NAME",
+      "enabled_types": [
+        "PERSON_NAME"
+      ],
+      "kind": "hard_negative",
+      "payload": "В тексте указан роман «Евгений Онегин».",
+      "expected_findings": [],
+      "expected_result": "В тексте указан роман «Евгений Онегин».",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PLACE_OF_BIRTH_1",
+      "target_type": "PLACE_OF_BIRTH",
+      "enabled_types": [
+        "PLACE_OF_BIRTH"
+      ],
+      "kind": "positive",
+      "payload": "Место рождения: Москва",
+      "expected_findings": [
+        {
+          "type": "PLACE_OF_BIRTH",
+          "start": 16,
+          "end": 22,
+          "value": "Москва"
+        }
+      ],
+      "expected_result": "Место рождения: ******",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PLACE_OF_BIRTH_2",
+      "target_type": "PLACE_OF_BIRTH",
+      "enabled_types": [
+        "PLACE_OF_BIRTH"
+      ],
+      "kind": "variant_positive",
+      "payload": "Клиент родился в Казани.",
+      "expected_findings": [
+        {
+          "type": "PLACE_OF_BIRTH",
+          "start": 17,
+          "end": 23,
+          "value": "Казани"
+        }
+      ],
+      "expected_result": "Клиент родился в ******.",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PLACE_OF_BIRTH_3",
+      "target_type": "PLACE_OF_BIRTH",
+      "enabled_types": [
+        "PLACE_OF_BIRTH"
+      ],
+      "kind": "hard_negative",
+      "payload": "Конференция пройдёт в Москве",
+      "expected_findings": [],
+      "expected_result": "Конференция пройдёт в Москве",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PLACE_OF_BIRTH_4",
+      "target_type": "PLACE_OF_BIRTH",
+      "enabled_types": [
+        "PLACE_OF_BIRTH"
+      ],
+      "kind": "hard_negative",
+      "payload": "Место проведения встречи: Казань",
+      "expected_findings": [],
+      "expected_result": "Место проведения встречи: Казань",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CITIZENSHIP_1",
+      "target_type": "CITIZENSHIP",
+      "enabled_types": [
+        "CITIZENSHIP"
+      ],
+      "kind": "positive",
+      "payload": "Гражданство клиента: РФ",
+      "expected_findings": [
+        {
+          "type": "CITIZENSHIP",
+          "start": 21,
+          "end": 23,
+          "value": "РФ"
+        }
+      ],
+      "expected_result": "Гражданство клиента: **",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CITIZENSHIP_2",
+      "target_type": "CITIZENSHIP",
+      "enabled_types": [
+        "CITIZENSHIP"
+      ],
+      "kind": "variant_positive",
+      "payload": "Клиент — гражданин Казахстана.",
+      "expected_findings": [
+        {
+          "type": "CITIZENSHIP",
+          "start": 19,
+          "end": 29,
+          "value": "Казахстана"
+        }
+      ],
+      "expected_result": "Клиент — гражданин **********.",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CITIZENSHIP_3",
+      "target_type": "CITIZENSHIP",
+      "enabled_types": [
+        "CITIZENSHIP"
+      ],
+      "kind": "hard_negative",
+      "payload": "Для участия гражданство РФ не требуется",
+      "expected_findings": [],
+      "expected_result": "Для участия гражданство РФ не требуется",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CITIZENSHIP_4",
+      "target_type": "CITIZENSHIP",
+      "enabled_types": [
+        "CITIZENSHIP"
+      ],
+      "kind": "hard_negative",
+      "payload": "Правила получения гражданства Казахстана опубликованы.",
+      "expected_findings": [],
+      "expected_result": "Правила получения гражданства Казахстана опубликованы.",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_ISSUER_1",
+      "target_type": "PASSPORT_ISSUER",
+      "enabled_types": [
+        "PASSPORT_ISSUER"
+      ],
+      "kind": "positive",
+      "payload": "Паспорт выдан ГУ МВД России по г. Москве",
+      "expected_findings": [
+        {
+          "type": "PASSPORT_ISSUER",
+          "start": 14,
+          "end": 40,
+          "value": "ГУ МВД России по г. Москве"
+        }
+      ],
+      "expected_result": "Паспорт выдан ** *** ****** ** *. ******",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_ISSUER_2",
+      "target_type": "PASSPORT_ISSUER",
+      "enabled_types": [
+        "PASSPORT_ISSUER"
+      ],
+      "kind": "variant_positive",
+      "payload": "Кем выдан паспорт: ОМВД России по району Арбат",
+      "expected_findings": [
+        {
+          "type": "PASSPORT_ISSUER",
+          "start": 19,
+          "end": 46,
+          "value": "ОМВД России по району Арбат"
+        }
+      ],
+      "expected_result": "Кем выдан паспорт: **** ****** ** ****** *****",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_ISSUER_3",
+      "target_type": "PASSPORT_ISSUER",
+      "enabled_types": [
+        "PASSPORT_ISSUER"
+      ],
+      "kind": "hard_negative",
+      "payload": "ГУ МВД России по г. Москве указано в справочнике организаций",
+      "expected_findings": [],
+      "expected_result": "ГУ МВД России по г. Москве указано в справочнике организаций",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_ISSUER_4",
+      "target_type": "PASSPORT_ISSUER",
+      "enabled_types": [
+        "PASSPORT_ISSUER"
+      ],
+      "kind": "hard_negative",
+      "payload": "Новость опубликована ОМВД России по району Арбат.",
+      "expected_findings": [],
+      "expected_result": "Новость опубликована ОМВД России по району Арбат.",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "ADDRESS_1",
+      "target_type": "ADDRESS",
+      "enabled_types": [
+        "ADDRESS"
+      ],
+      "kind": "positive",
+      "payload": "Адрес проживания клиента: Москва, ул. Тверская, д. 10, кв. 15",
+      "expected_findings": [
+        {
+          "type": "ADDRESS",
+          "start": 26,
+          "end": 61,
+          "value": "Москва, ул. Тверская, д. 10, кв. 15"
+        }
+      ],
+      "expected_result": "Адрес проживания клиента: ******, **. ********, *. **, **. **",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "ADDRESS_2",
+      "target_type": "ADDRESS",
+      "enabled_types": [
+        "ADDRESS"
+      ],
+      "kind": "variant_positive",
+      "payload": "Клиент проживает: ул. Лесная, д. 5",
+      "expected_findings": [
+        {
+          "type": "ADDRESS",
+          "start": 18,
+          "end": 34,
+          "value": "ул. Лесная, д. 5"
+        }
+      ],
+      "expected_result": "Клиент проживает: **. ******, *. *",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "ADDRESS_3",
+      "target_type": "ADDRESS",
+      "enabled_types": [
+        "ADDRESS"
+      ],
+      "kind": "hard_negative",
+      "payload": "Адрес отделения Банка: Москва, ул. Тверская, д. 10",
+      "expected_findings": [],
+      "expected_result": "Адрес отделения Банка: Москва, ул. Тверская, д. 10",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "ADDRESS_4",
+      "target_type": "ADDRESS",
+      "enabled_types": [
+        "ADDRESS"
+      ],
+      "kind": "hard_negative",
+      "payload": "Адрес офиса компании: ул. Лесная, д. 5",
+      "expected_findings": [],
+      "expected_result": "Адрес офиса компании: ул. Лесная, д. 5",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CARDHOLDER_NAME_1",
+      "target_type": "CARDHOLDER_NAME",
+      "enabled_types": [
+        "CARDHOLDER_NAME"
+      ],
+      "kind": "positive",
+      "payload": "Имя держателя карты: IVAN IVANOV",
+      "expected_findings": [
+        {
+          "type": "CARDHOLDER_NAME",
+          "start": 21,
+          "end": 32,
+          "value": "IVAN IVANOV"
+        }
+      ],
+      "expected_result": "Имя держателя карты: **** ******",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CARDHOLDER_NAME_2",
+      "target_type": "CARDHOLDER_NAME",
+      "enabled_types": [
+        "CARDHOLDER_NAME"
+      ],
+      "kind": "variant_positive",
+      "payload": "Держатель карты: Анна Петрова",
+      "expected_findings": [
+        {
+          "type": "CARDHOLDER_NAME",
+          "start": 17,
+          "end": 29,
+          "value": "Анна Петрова"
+        }
+      ],
+      "expected_result": "Держатель карты: **** *******",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CARDHOLDER_NAME_3",
+      "target_type": "CARDHOLDER_NAME",
+      "enabled_types": [
+        "CARDHOLDER_NAME"
+      ],
+      "kind": "hard_negative",
+      "payload": "Докладчик: IVAN IVANOV",
+      "expected_findings": [],
+      "expected_result": "Докладчик: IVAN IVANOV",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CARDHOLDER_NAME_4",
+      "target_type": "CARDHOLDER_NAME",
+      "enabled_types": [
+        "CARDHOLDER_NAME"
+      ],
+      "kind": "hard_negative",
+      "payload": "Автор книги: Анна Петрова",
+      "expected_findings": [],
+      "expected_result": "Автор книги: Анна Петрова",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "BIRTH_DATE_1",
+      "target_type": "BIRTH_DATE",
+      "enabled_types": [
+        "BIRTH_DATE"
+      ],
+      "kind": "positive",
+      "payload": "Дата рождения клиента: 12.03.2001",
+      "expected_findings": [
+        {
+          "type": "BIRTH_DATE",
+          "start": 23,
+          "end": 33,
+          "value": "12.03.2001"
+        }
+      ],
+      "expected_result": "Дата рождения клиента: **.**.****",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "BIRTH_DATE_2",
+      "target_type": "BIRTH_DATE",
+      "enabled_types": [
+        "BIRTH_DATE"
+      ],
+      "kind": "variant_positive",
+      "payload": "Клиент родился 3 мая 1998 года.",
+      "expected_findings": [
+        {
+          "type": "BIRTH_DATE",
+          "start": 15,
+          "end": 30,
+          "value": "3 мая 1998 года"
+        }
+      ],
+      "expected_result": "Клиент родился * *** **** ****.",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "BIRTH_DATE_3",
+      "target_type": "BIRTH_DATE",
+      "enabled_types": [
+        "BIRTH_DATE"
+      ],
+      "kind": "hard_negative",
+      "payload": "Дата заседания: 12.03.2001",
+      "expected_findings": [],
+      "expected_result": "Дата заседания: 12.03.2001",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "BIRTH_DATE_4",
+      "target_type": "BIRTH_DATE",
+      "enabled_types": [
+        "BIRTH_DATE"
+      ],
+      "kind": "hard_negative",
+      "payload": "Дата публикации: 3 мая 1998 года",
+      "expected_findings": [],
+      "expected_result": "Дата публикации: 3 мая 1998 года",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_NUMBER_1",
+      "target_type": "PASSPORT_NUMBER",
+      "enabled_types": [
+        "PASSPORT_NUMBER"
+      ],
+      "kind": "positive",
+      "payload": "Паспорт клиента: серия 4510, номер 123456",
+      "expected_findings": [
+        {
+          "type": "PASSPORT_NUMBER",
+          "start": 23,
+          "end": 27,
+          "value": "4510"
+        },
+        {
+          "type": "PASSPORT_NUMBER",
+          "start": 35,
+          "end": 41,
+          "value": "123456"
+        }
+      ],
+      "expected_result": "Паспорт клиента: серия ****, номер ******",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_NUMBER_2",
+      "target_type": "PASSPORT_NUMBER",
+      "enabled_types": [
+        "PASSPORT_NUMBER"
+      ],
+      "kind": "variant_positive",
+      "payload": "Паспорт: 45 10 123456",
+      "expected_findings": [
+        {
+          "type": "PASSPORT_NUMBER",
+          "start": 9,
+          "end": 21,
+          "value": "45 10 123456"
+        }
+      ],
+      "expected_result": "Паспорт: ** ** ******",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_NUMBER_3",
+      "target_type": "PASSPORT_NUMBER",
+      "enabled_types": [
+        "PASSPORT_NUMBER"
+      ],
+      "kind": "hard_negative",
+      "payload": "Номер заказа: 4510 123456",
+      "expected_findings": [],
+      "expected_result": "Номер заказа: 4510 123456",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_NUMBER_4",
+      "target_type": "PASSPORT_NUMBER",
+      "enabled_types": [
+        "PASSPORT_NUMBER"
+      ],
+      "kind": "hard_negative",
+      "payload": "Артикул изделия: 4510123456",
+      "expected_findings": [],
+      "expected_result": "Артикул изделия: 4510123456",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "SUBDIVISION_CODE_1",
+      "target_type": "SUBDIVISION_CODE",
+      "enabled_types": [
+        "SUBDIVISION_CODE"
+      ],
+      "kind": "positive",
+      "payload": "Код подразделения паспорта: 770-001",
+      "expected_findings": [
+        {
+          "type": "SUBDIVISION_CODE",
+          "start": 28,
+          "end": 35,
+          "value": "770-001"
+        }
+      ],
+      "expected_result": "Код подразделения паспорта: ***-***",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "SUBDIVISION_CODE_2",
+      "target_type": "SUBDIVISION_CODE",
+      "enabled_types": [
+        "SUBDIVISION_CODE"
+      ],
+      "kind": "variant_positive",
+      "payload": "Паспорт: код подразделения 780-002",
+      "expected_findings": [
+        {
+          "type": "SUBDIVISION_CODE",
+          "start": 27,
+          "end": 34,
+          "value": "780-002"
+        }
+      ],
+      "expected_result": "Паспорт: код подразделения ***-***",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "SUBDIVISION_CODE_3",
+      "target_type": "SUBDIVISION_CODE",
+      "enabled_types": [
+        "SUBDIVISION_CODE"
+      ],
+      "kind": "hard_negative",
+      "payload": "В справочнике указан код 770-001",
+      "expected_findings": [],
+      "expected_result": "В справочнике указан код 770-001",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "SUBDIVISION_CODE_4",
+      "target_type": "SUBDIVISION_CODE",
+      "enabled_types": [
+        "SUBDIVISION_CODE"
+      ],
+      "kind": "hard_negative",
+      "payload": "Код товара: 780-002",
+      "expected_findings": [],
+      "expected_result": "Код товара: 780-002",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_ISSUE_DATE_1",
+      "target_type": "PASSPORT_ISSUE_DATE",
+      "enabled_types": [
+        "PASSPORT_ISSUE_DATE"
+      ],
+      "kind": "positive",
+      "payload": "Дата выдачи паспорта: 15.06.2020",
+      "expected_findings": [
+        {
+          "type": "PASSPORT_ISSUE_DATE",
+          "start": 22,
+          "end": 32,
+          "value": "15.06.2020"
+        }
+      ],
+      "expected_result": "Дата выдачи паспорта: **.**.****",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_ISSUE_DATE_2",
+      "target_type": "PASSPORT_ISSUE_DATE",
+      "enabled_types": [
+        "PASSPORT_ISSUE_DATE"
+      ],
+      "kind": "variant_positive",
+      "payload": "Паспорт выдан 5 апреля 2019 года.",
+      "expected_findings": [
+        {
+          "type": "PASSPORT_ISSUE_DATE",
+          "start": 14,
+          "end": 32,
+          "value": "5 апреля 2019 года"
+        }
+      ],
+      "expected_result": "Паспорт выдан * ****** **** ****.",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_ISSUE_DATE_3",
+      "target_type": "PASSPORT_ISSUE_DATE",
+      "enabled_types": [
+        "PASSPORT_ISSUE_DATE"
+      ],
+      "kind": "hard_negative",
+      "payload": "Документ опубликован 15.06.2020",
+      "expected_findings": [],
+      "expected_result": "Документ опубликован 15.06.2020",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PASSPORT_ISSUE_DATE_4",
+      "target_type": "PASSPORT_ISSUE_DATE",
+      "enabled_types": [
+        "PASSPORT_ISSUE_DATE"
+      ],
+      "kind": "hard_negative",
+      "payload": "Дата выдачи заказа: 5 апреля 2019 года",
+      "expected_findings": [],
+      "expected_result": "Дата выдачи заказа: 5 апреля 2019 года",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "DRIVER_LICENSE_NUMBER_1",
+      "target_type": "DRIVER_LICENSE_NUMBER",
+      "enabled_types": [
+        "DRIVER_LICENSE_NUMBER"
+      ],
+      "kind": "positive",
+      "payload": "Водительское удостоверение: серия 77 11, номер 123456",
+      "expected_findings": [
+        {
+          "type": "DRIVER_LICENSE_NUMBER",
+          "start": 34,
+          "end": 39,
+          "value": "77 11"
+        },
+        {
+          "type": "DRIVER_LICENSE_NUMBER",
+          "start": 47,
+          "end": 53,
+          "value": "123456"
+        }
+      ],
+      "expected_result": "Водительское удостоверение: серия ** **, номер ******",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "DRIVER_LICENSE_NUMBER_2",
+      "target_type": "DRIVER_LICENSE_NUMBER",
+      "enabled_types": [
+        "DRIVER_LICENSE_NUMBER"
+      ],
+      "kind": "variant_positive",
+      "payload": "ВУ клиента: 7711123456",
+      "expected_findings": [
+        {
+          "type": "DRIVER_LICENSE_NUMBER",
+          "start": 12,
+          "end": 22,
+          "value": "7711123456"
+        }
+      ],
+      "expected_result": "ВУ клиента: **********",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "DRIVER_LICENSE_NUMBER_3",
+      "target_type": "DRIVER_LICENSE_NUMBER",
+      "enabled_types": [
+        "DRIVER_LICENSE_NUMBER"
+      ],
+      "kind": "hard_negative",
+      "payload": "Номер заявки: 77 11 123456",
+      "expected_findings": [],
+      "expected_result": "Номер заявки: 77 11 123456",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "DRIVER_LICENSE_NUMBER_4",
+      "target_type": "DRIVER_LICENSE_NUMBER",
+      "enabled_types": [
+        "DRIVER_LICENSE_NUMBER"
+      ],
+      "kind": "hard_negative",
+      "payload": "Номер накладной: 7711123456",
+      "expected_findings": [],
+      "expected_result": "Номер накладной: 7711123456",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CVV_1",
+      "target_type": "CVV",
+      "enabled_types": [
+        "CVV"
+      ],
+      "kind": "positive",
+      "payload": "CVV карты: 123",
+      "expected_findings": [
+        {
+          "type": "CVV",
+          "start": 11,
+          "end": 14,
+          "value": "123"
+        }
+      ],
+      "expected_result": "CVV карты: ***",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CVV_2",
+      "target_type": "CVV",
+      "enabled_types": [
+        "CVV"
+      ],
+      "kind": "variant_positive",
+      "payload": "CVC: 456",
+      "expected_findings": [
+        {
+          "type": "CVV",
+          "start": 5,
+          "end": 8,
+          "value": "456"
+        }
+      ],
+      "expected_result": "CVC: ***",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CVV_3",
+      "target_type": "CVV",
+      "enabled_types": [
+        "CVV"
+      ],
+      "kind": "hard_negative",
+      "payload": "Код офиса: 123",
+      "expected_findings": [],
+      "expected_result": "Код офиса: 123",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CVV_4",
+      "target_type": "CVV",
+      "enabled_types": [
+        "CVV"
+      ],
+      "kind": "hard_negative",
+      "payload": "В очереди 456 человек.",
+      "expected_findings": [],
+      "expected_result": "В очереди 456 человек.",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CARD_PIN_1",
+      "target_type": "CARD_PIN",
+      "enabled_types": [
+        "CARD_PIN"
+      ],
+      "kind": "positive",
+      "payload": "PIN-код карты: 4821",
+      "expected_findings": [
+        {
+          "type": "CARD_PIN",
+          "start": 15,
+          "end": 19,
+          "value": "4821"
+        }
+      ],
+      "expected_result": "PIN-код карты: ****",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CARD_PIN_2",
+      "target_type": "CARD_PIN",
+      "enabled_types": [
+        "CARD_PIN"
+      ],
+      "kind": "variant_positive",
+      "payload": "ПИН банковской карты: 9057",
+      "expected_findings": [
+        {
+          "type": "CARD_PIN",
+          "start": 22,
+          "end": 26,
+          "value": "9057"
+        }
+      ],
+      "expected_result": "ПИН банковской карты: ****",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CARD_PIN_3",
+      "target_type": "CARD_PIN",
+      "enabled_types": [
+        "CARD_PIN"
+      ],
+      "kind": "hard_negative",
+      "payload": "Код двери: 4821",
+      "expected_findings": [],
+      "expected_result": "Код двери: 4821",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "CARD_PIN_4",
+      "target_type": "CARD_PIN",
+      "enabled_types": [
+        "CARD_PIN"
+      ],
+      "kind": "hard_negative",
+      "payload": "PIN SIM-карты: 9057",
+      "expected_findings": [],
+      "expected_result": "PIN SIM-карты: 9057",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "EMAIL_1",
+      "target_type": "EMAIL",
+      "enabled_types": [
+        "EMAIL"
+      ],
+      "kind": "positive",
+      "payload": "Email клиента: ivanov@example.ru",
+      "expected_findings": [
+        {
+          "type": "EMAIL",
+          "start": 15,
+          "end": 32,
+          "value": "ivanov@example.ru"
+        }
+      ],
+      "expected_result": "Email клиента: ******@*******.**",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "EMAIL_2",
+      "target_type": "EMAIL",
+      "enabled_types": [
+        "EMAIL"
+      ],
+      "kind": "variant_positive",
+      "payload": "📧 Почта клиента: anna.petrov+test@example.com",
+      "expected_findings": [
+        {
+          "type": "EMAIL",
+          "start": 17,
+          "end": 45,
+          "value": "anna.petrov+test@example.com"
+        }
+      ],
+      "expected_result": "📧 Почта клиента: ****.******+****@*******.***",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "EMAIL_3",
+      "target_type": "EMAIL",
+      "enabled_types": [
+        "EMAIL"
+      ],
+      "kind": "hard_negative",
+      "payload": "Почта поддержки: support@bank.ru",
+      "expected_findings": [],
+      "expected_result": "Почта поддержки: support@bank.ru",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "EMAIL_4",
+      "target_type": "EMAIL",
+      "enabled_types": [
+        "EMAIL"
+      ],
+      "kind": "hard_negative",
+      "payload": "Email клиента: ivanov@@example.ru",
+      "expected_findings": [],
+      "expected_result": "Email клиента: ivanov@@example.ru",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PHONE_1",
+      "target_type": "PHONE",
+      "enabled_types": [
+        "PHONE"
+      ],
+      "kind": "positive",
+      "payload": "Телефон клиента: +7 999 123-45-67",
+      "expected_findings": [
+        {
+          "type": "PHONE",
+          "start": 17,
+          "end": 33,
+          "value": "+7 999 123-45-67"
+        }
+      ],
+      "expected_result": "Телефон клиента: +* *** ***-**-**",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PHONE_2",
+      "target_type": "PHONE",
+      "enabled_types": [
+        "PHONE"
+      ],
+      "kind": "variant_positive",
+      "payload": "Телефон клиента: 8 (999) 123 45 67",
+      "expected_findings": [
+        {
+          "type": "PHONE",
+          "start": 17,
+          "end": 34,
+          "value": "8 (999) 123 45 67"
+        }
+      ],
+      "expected_result": "Телефон клиента: * (***) *** ** **",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PHONE_3",
+      "target_type": "PHONE",
+      "enabled_types": [
+        "PHONE"
+      ],
+      "kind": "hard_negative",
+      "payload": "Телефон колл-центра: +7 999 123-45-67",
+      "expected_findings": [],
+      "expected_result": "Телефон колл-центра: +7 999 123-45-67",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PHONE_4",
+      "target_type": "PHONE",
+      "enabled_types": [
+        "PHONE"
+      ],
+      "kind": "hard_negative",
+      "payload": "Номер заказа: 99912",
+      "expected_findings": [],
+      "expected_result": "Номер заказа: 99912",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "INN_PERSON_1",
+      "target_type": "INN_PERSON",
+      "enabled_types": [
+        "INN_PERSON"
+      ],
+      "kind": "positive",
+      "payload": "ИНН клиента: 123456789047",
+      "expected_findings": [
+        {
+          "type": "INN_PERSON",
+          "start": 13,
+          "end": 25,
+          "value": "123456789047"
+        }
+      ],
+      "expected_result": "ИНН клиента: ************",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "INN_PERSON_2",
+      "target_type": "INN_PERSON",
+      "enabled_types": [
+        "INN_PERSON"
+      ],
+      "kind": "variant_positive",
+      "payload": "ИНН физического лица:\n123456789047",
+      "expected_findings": [
+        {
+          "type": "INN_PERSON",
+          "start": 22,
+          "end": 34,
+          "value": "123456789047"
+        }
+      ],
+      "expected_result": "ИНН физического лица:\n************",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "INN_PERSON_3",
+      "target_type": "INN_PERSON",
+      "enabled_types": [
+        "INN_PERSON"
+      ],
+      "kind": "hard_negative",
+      "payload": "Номер договора: 123456789047",
+      "expected_findings": [],
+      "expected_result": "Номер договора: 123456789047",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "INN_PERSON_4",
+      "target_type": "INN_PERSON",
+      "enabled_types": [
+        "INN_PERSON"
+      ],
+      "kind": "hard_negative",
+      "payload": "ИНН клиента: 123456789048",
+      "expected_findings": [],
+      "expected_result": "ИНН клиента: 123456789048",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PAYMENT_CARD_1",
+      "target_type": "PAYMENT_CARD",
+      "enabled_types": [
+        "PAYMENT_CARD"
+      ],
+      "kind": "positive",
+      "payload": "Номер карты клиента: 4111 1111 1111 1111",
+      "expected_findings": [
+        {
+          "type": "PAYMENT_CARD",
+          "start": 21,
+          "end": 40,
+          "value": "4111 1111 1111 1111"
+        }
+      ],
+      "expected_result": "Номер карты клиента: **** **** **** ****",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PAYMENT_CARD_2",
+      "target_type": "PAYMENT_CARD",
+      "enabled_types": [
+        "PAYMENT_CARD"
+      ],
+      "kind": "variant_positive",
+      "payload": "Карта клиента: 5555-5555-5555-4444",
+      "expected_findings": [
+        {
+          "type": "PAYMENT_CARD",
+          "start": 15,
+          "end": 34,
+          "value": "5555-5555-5555-4444"
+        }
+      ],
+      "expected_result": "Карта клиента: ****-****-****-****",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Подтверждённая роль и формат целевого типа",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PAYMENT_CARD_3",
+      "target_type": "PAYMENT_CARD",
+      "enabled_types": [
+        "PAYMENT_CARD"
+      ],
+      "kind": "hard_negative",
+      "payload": "Идентификатор операции: 4111111111111111",
+      "expected_findings": [],
+      "expected_result": "Идентификатор операции: 4111111111111111",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    },
+    {
+      "id": "PAYMENT_CARD_4",
+      "target_type": "PAYMENT_CARD",
+      "enabled_types": [
+        "PAYMENT_CARD"
+      ],
+      "kind": "hard_negative",
+      "payload": "Номер карты клиента: 4111 1111 1111 1112",
+      "expected_findings": [],
+      "expected_result": "Номер карты клиента: 4111 1111 1111 1112",
+      "mask_strategy": "dev_redact_v1",
+      "reason": "Нет целевой роли, явное исключение или невалидный формат",
+      "status": "Не запускался"
+    }
+  ]
+}
