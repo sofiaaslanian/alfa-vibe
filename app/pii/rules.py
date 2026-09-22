@@ -1454,12 +1454,16 @@ def detect_person_labelled(text: str) -> list[Finding]:
         from_ya = bool(re.search(r"(?i)(?<![А-Яа-яЁёA-Za-z0-9])я\s*[:\-—–]?\s*$", cue))
         _add(m.start(1), m.end(1), 0.92, "person_called_rule_v2", from_ya=from_ya)
 
-    # «Иван Петров хочет оформить карту» — capital FIO + real banking intent
-    from app.pii.claims import has_banking_intent
+    # «Иван Петров хочет оформить карту» — capital FIO + real banking intent.
+    # Candidate-first is important for long texts: avoid scanning the whole
+    # payload once per banking-intent regex when there is no sentence-leading FIO.
+    banking_leads = list(PERSON_BANKING_LEAD_RE.finditer(text))
+    if banking_leads:
+        from app.pii.claims import has_banking_intent
 
-    if has_banking_intent(text, include_generic=False):
-        for m in PERSON_BANKING_LEAD_RE.finditer(text):
-            _add(m.start(1), m.end(1), 0.85, "person_banking_lead_v2")
+        if has_banking_intent(text, include_generic=False):
+            for m in banking_leads:
+                _add(m.start(1), m.end(1), 0.85, "person_banking_lead_v2")
 
     return out
 
