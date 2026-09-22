@@ -19,7 +19,13 @@ COPY app ./app
 COPY config.yaml .
 COPY scripts ./scripts
 COPY ui ./ui
-RUN cd ui && unzip -q -o icons.zip -d icons && unzip -q -o photos.zip -d photos
+
+# Full repository contains demo media as ZIPs; source-only submission may omit them.
+# Build must still succeed in both cases.
+RUN set -eux; \
+    if [ -f ui/icons.zip ]; then unzip -q -o ui/icons.zip -d ui/icons; fi; \
+    if [ -f ui/photos.zip ]; then unzip -q -o ui/photos.zip -d ui/photos; fi
+
 COPY docs/acceptance_cases.json docs/holdout_cases.json docs/acceptance_summary.json \
      docs/load_results.json docs/criteria_checklist.json ./docs/
 COPY .env.example .
