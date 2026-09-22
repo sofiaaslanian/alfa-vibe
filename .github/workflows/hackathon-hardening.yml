@@ -1,0 +1,74 @@
+name: hackathon-hardening
+
+on:
+  push:
+    branches:
+      - fix/hackathon-hardening
+  workflow_dispatch:
+
+jobs:
+  quality-and-load:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      NER_ENABLED: "0"
+      STORAGE_BACKEND: redis
+      REDIS_URL: redis://127.0.0.1:6379/0
+      STATE_HMAC_KEY: ci-hmac-key
+      STATE_ENC_KEY: ci-enc-key
+      PROCESS_CONCURRENCY: "180"
+      PROXY_API_KEYS: demo-key
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: NER=0 quality suite
+        run: pytest -q
+
+      - name: Acceptance NER=0
+        run: python scripts/eval_acceptance.py
+
+      - name: Start API with Redis
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8080 --workers 2 > /tmp/alfa-api.log 2>&1 &
+          echo $! > /tmp/alfa-api.pid
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/ready && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/ready
+
+      - name: Redis short pair load
+        run: python scripts/load_smoke.py --url http://127.0.0.1:8080 --n 400 --concurrency 40 --mode pair
+
+      - name: Redis 100k pair
+        run: python scripts/load_smoke.py --url http://127.0.0.1:8080 --profile 100k --mode pair --n 4 --concurrency 2
+
+      - name: Resource snapshot
+        if: always()
+        run: |
+          echo "=== redis memory ==="
+          redis-cli INFO memory | grep -E 'used_memory_human|maxmemory_human|mem_fragmentation_ratio' || true
+          echo "=== uvicorn processes ==="
+          ps -eo pid,pcpu,pmem,rss,command | grep '[u]vicorn' || true
+          echo "=== API tail ==="
+          tail -n 80 /tmp/alfa-api.log || true
