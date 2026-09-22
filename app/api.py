@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -24,7 +25,7 @@ from app.masking import restore_scoped_tokens
 from app.process import ProcessError, ProcessService
 from app.state import build_store
 
-log = logging.getLogger("alfa.api")
+log = logging.getLogger("uvicorn.error")
 
 ROOT = Path(__file__).resolve().parents[1]
 UI_DIR = ROOT / "ui"
@@ -41,7 +42,7 @@ _process_sem: asyncio.Semaphore | None = None
 def _process_semaphore() -> asyncio.Semaphore:
     global _process_sem
     if _process_sem is None:
-        _process_sem = asyncio.Semaphore(int(os.getenv("PROCESS_CONCURRENCY", "180")))
+        _process_sem = asyncio.Semaphore(int(os.getenv("PROCESS_CONCURRENCY", "48")))
     return _process_sem
 
 
@@ -179,9 +180,35 @@ async def process(
     mode = "unknown"
     status = "200"
     try:
-        live = svc.store.get_live("autotest", body.payload_id)
-        mode = "mask" if live is None else "retry_or_demask"
-        result = svc.process(body.payload, body.payload_id, system or None)
+        trace: dict[str, object] = {}
+        result = await asyncio.to_thread(
+            svc.process,
+            body.payload,
+            body.payload_id,
+            system or None,
+            trace=trace,
+        )
+        mode = str(trace.get("mode", mode))
+        log.info(
+            json.dumps(
+                {
+                    "event": "process",
+                    "payload_id_hash": hashlib.sha256(body.payload_id.encode("utf-8")).hexdigest()[:12],
+                    "system": system or "autotest",
+                    "mode": trace.get("mode", mode),
+                    "types": trace.get("types", []),
+                    "findings": trace.get("findings", 0),
+                    "detect_ms": trace.get("detect_ms", 0.0),
+                    "mask_ms": trace.get("mask_ms", 0.0),
+                    "state_ms": trace.get("state_ms", 0.0),
+                    "total_ms": trace.get("total_ms", 0.0),
+                    "mask_style": trace.get("mask_style", ""),
+                    "payload_chars": len(body.payload),
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
         return ProcessResponse(result=result)
     except ProcessError as exc:
         status = str(exc.status)
