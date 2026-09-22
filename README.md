@@ -26,19 +26,22 @@ curl -s -X POST localhost:8080/process \
 |---|---|
 | Format | `app/pii/rules/` — email, phone, INN(+checksum), card(+Luhn) |
 | Format-context | address, dates, passport, VU, subdivision, CVV, PIN |
-| Context (ФИО) | NER service на `redmadrobot-rnd/rubert-base-pii-ner` (opt-in) |
+| Context (ФИО) | RuBERT `redmadrobot-rnd/rubert-base-pii-ner` → PERSON |
 
-Включить NER:
+Включить ФИО (по умолчанию в `.env.example` уже так):
 
 ```bash
-# отдельный сервис (рекомендуется)
-pip install transformers torch
-NER_PRELOAD=1 uvicorn services.ner.app:app --port 8090
-# в proxy:
-NER_ENABLED=1 NER_URL=http://127.0.0.1:8090
+export NER_ENABLED=1 NER_LOCAL=1 NER_FAIL_CLOSED=0
+# первый запуск скачает модель с HF (~несколько минут)
+uvicorn app.main:app --port 8080 --reload
 ```
 
-Или локально в том же процессе: `NER_ENABLED=1 NER_LOCAL=1`.
+Отдельный NER-сервис (для нагрузки):
+
+```bash
+NER_PRELOAD=1 uvicorn services.ner.app:app --port 8090
+NER_ENABLED=1 NER_URL=http://127.0.0.1:8090 uvicorn app.main:app --port 8080
+```
 
 ## Тесты
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from app.pii.contract import Finding
 
 DEFAULT_MASKS = {
-    "EMAIL": "X" * 8 + "@" + "x" * 5 + ".xx",
+    "EMAIL": None,  # length-preserving below
     "PHONE": "+7 XXX XXX-XX-XX",
     "INN": "XXXXXXXXXXXX",
     "PAYMENT_CARD": "XXXX XXXX XXXX XXXX",
@@ -20,6 +20,9 @@ DEFAULT_MASKS = {
     "PIN": "XXXX",
 }
 
+# Fixed tokens: do not stretch/shrink to span length
+FIXED_TOKENS = {"PERSON", "ADDRESS"}
+
 
 def apply_masks(text: str, findings: list[Finding], token_style: bool = False) -> str:
     if not findings:
@@ -31,8 +34,10 @@ def apply_masks(text: str, findings: list[Finding], token_style: bool = False) -
         if token_style:
             counters[f.type] = counters.get(f.type, 0) + 1
             replacement = f"<{f.type}_{counters[f.type]}>"
+        elif f.type in FIXED_TOKENS:
+            replacement = DEFAULT_MASKS[f.type]
         else:
-            template = DEFAULT_MASKS.get(f.type, "X" * len(original))
+            template = DEFAULT_MASKS.get(f.type) or ("X" * len(original))
             if len(template) == len(original):
                 replacement = template
             elif len(template) > len(original):

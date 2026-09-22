@@ -8,13 +8,22 @@ LABEL_MAP = {
     "FIRST_NAME": "PERSON",
     "LAST_NAME": "PERSON",
     "MIDDLE_NAME": "PERSON",
+    # some checkpoints may emit these
+    "PER": "PERSON",
+    "PERSON": "PERSON",
 }
 
-ML_ALLOWED_TYPES = set(LABEL_MAP.keys())
+
+def _normalize_label(label: str) -> str:
+    label = (label or "").strip()
+    if label.startswith(("B-", "I-", "S-", "E-")):
+        label = label.split("-", 1)[1]
+    return label.upper().replace(" ", "_")
 
 
 def map_entity(entity: dict) -> Finding | None:
-    label = entity.get("entity_group") or entity.get("type")
+    raw = entity.get("entity_group") or entity.get("entity") or entity.get("type")
+    label = _normalize_label(str(raw))
     if label not in LABEL_MAP:
         return None
     return Finding(
@@ -26,7 +35,7 @@ def map_entity(entity: dict) -> Finding | None:
     )
 
 
-def merge_adjacent_person(findings: list[Finding], max_gap: int = 2) -> list[Finding]:
+def merge_adjacent_person(findings: list[Finding], max_gap: int = 3) -> list[Finding]:
     """Merge neighboring PERSON spans (FIRST+LAST+MIDDLE) into one."""
     persons = sorted(
         [f for f in findings if f.type == "PERSON"],
@@ -39,7 +48,9 @@ def merge_adjacent_person(findings: list[Finding], max_gap: int = 2) -> list[Fin
     merged: list[Finding] = []
     cur = persons[0]
     for nxt in persons[1:]:
-        if nxt.start <= cur.end + max_gap:
+        gap = nxt.start - cur.end
+        # allow space/hyphen between name parts
+        if gap <= max_gap:
             cur = Finding(
                 type="PERSON",
                 start=cur.start,

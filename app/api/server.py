@@ -42,6 +42,17 @@ async def lifespan(app: FastAPI):
     app.state.config = cfg
     app.state.masker = Masker(cfg)
     app.state.llm = AlfaGenClient()
+    if os.getenv("NER_ENABLED", "0") == "1":
+        from app.pii.pipeline import get_ner
+
+        ner = get_ner()
+        try:
+            # preload local weights so first /process is not cold
+            if ner.use_local and not ner.base_url:
+                ner._ensure_local()
+            log.info("NER enabled local=%s url=%s", ner.use_local, ner.base_url or "-")
+        except Exception:
+            log.exception("NER preload failed")
     log.info("Alfa proxy started: systems=%d pd_types=%d", len(cfg.systems), len(cfg.pd_rules))
     yield
 
