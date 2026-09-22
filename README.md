@@ -6,10 +6,13 @@
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
+pip install -r requirements.txt          # API + load (без torch)
+# pip install -r requirements-ner.txt    # опционально RuBERT FIO
+cp .env.example .env                     # прописать ключи / STATE_*
 uvicorn app.main:app --port 8080 --reload
 ```
+
+Docker-образ **без** torch (лёгкий). NER на RU только если отдельно поставите `requirements-ner.txt` и `NER_ENABLED=1`.
 
 ```bash
 # mask
@@ -53,13 +56,46 @@ curl -s localhost:8080/proxy/chat \
 | `autotest` | все | да | `/process` |
 | `demo` | все | да | proxy демо |
 | `format_only` | email/phone/INN/card | нет | урезанный consumer |
+| `high_rps` | все кроме PERSON | да | нагрузка без NER |
+
+## Перед RU (локальный gate)
+
+Ещё **не** готово к сдаче без замера на RU. Локально закрыть:
+
+```bash
+chmod +x scripts/pre_ru_check.sh
+STORAGE_BACKEND=memory NER_ENABLED=0 uvicorn app.main:app --port 8080 &
+./scripts/pre_ru_check.sh
+```
+
+Что уже должно быть зелёным локально:
+- pytest (rules + holdout + process)
+- 68 acceptance (с `NER_ENABLED=0` ФИО через labelled/role)
+- create RPS / 100k без падения
+
+Что **только на RU**:
+- `load_smoke.py --url https://<host> --n 2000 --concurrency 100`
+- `load_smoke.py --url https://<host> --profile 100k ...`
+- вписать цифры в слайд/README
 
 ## Метрики и нагрузка
 
 - Prometheus: `GET /metrics` (Latency / RPS / TPS)
 - Ready: `GET /ready` (проверка state store)
-- Локальный smoke: `python scripts/load_smoke.py --n 200 --concurrency 20`
-- На RU-сервере: тот же скрипт с `--url https://<your-host>` после деплоя
+- NER только если `NER_ENABLED=1` **и** в типах системы есть `PERSON`
+- ФИО без NER: поля `ФИО:` / роль `Клиент Имя Фамилия`
+- Локальный smoke:
+  ```bash
+  STORAGE_BACKEND=memory NER_ENABLED=0 uvicorn app.main:app --port 8080
+  python scripts/load_smoke.py --n 500 --concurrency 50 --mode create
+  python scripts/load_smoke.py --profile 100k --mode create --n 10 --concurrency 2
+  ```
+- RU:
+  ```bash
+  docker compose up --build -d
+  python scripts/load_smoke.py --url https://<ru-host> --n 2000 --concurrency 100 --mode create
+  python scripts/load_smoke.py --url https://<ru-host> --profile 100k --mode create --n 20 --concurrency 4
+  ```
 
 ## Документы
 
@@ -69,6 +105,7 @@ curl -s localhost:8080/proxy/chat \
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | API / Redis / маски |
 | [`docs/DETECTION.md`](docs/DETECTION.md) | 17 типов |
 | [`docs/acceptance_cases.json`](docs/acceptance_cases.json) | 68 кейсов |
+| [`docs/holdout_cases.json`](docs/holdout_cases.json) | независимый holdout |
 | [`docs/HACKATHON_BRIEF.md`](docs/HACKATHON_BRIEF.md) | критерии жюри |
 
 ## Структура
@@ -85,6 +122,8 @@ docs/ tests/ scripts/
 
 ```bash
 pytest -q
+# 68 cases:
+NER_ENABLED=0 python scripts/eval_acceptance.py
 ```
 
-ФИО (RuBERT): `NER_ENABLED=1 NER_LOCAL=1` (первый запуск качает модель).
+RuBERT (опционально): `NER_ENABLED=1 NER_LOCAL=1` (нужен HF cache / `HF_HUB_OFFLINE=1`).

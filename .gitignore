@@ -9,3 +9,7 @@ dist/
 build/
 .mypy_cache/
 models/
+docs/acceptance_eval_report.json
+app/**/__pycache__/
+tests/**/__pycache__/
+

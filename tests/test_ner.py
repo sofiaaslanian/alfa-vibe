@@ -33,10 +33,18 @@ def test_rubert_fio_live():
     os.environ["NER_ENABLED"] = "1"
     os.environ["NER_LOCAL"] = "1"
     os.environ["NER_FAIL_CLOSED"] = "0"
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
     import app.pii.detect as detect_mod
 
     detect_mod._ner = None
     from app.pii.detect import detect_pii
+    from app.pii.ner import PiiNerModel
+
+    try:
+        PiiNerModel()
+    except Exception as e:
+        pytest.skip(f"RuBERT unavailable offline: {e}")
 
     text = "Меня зовут Иван Петров, я живу в Москве."
     persons = [f for f in detect_pii(text, enable_ner=True) if f.type == "PERSON"]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Optional
 
 from app.config import Config
@@ -16,6 +17,9 @@ log = logging.getLogger("alfa.process")
 
 NS_AUTOTEST = "autotest"
 NS_PROXY = "proxy"
+
+# NER is expensive — only when PERSON is in the enabled type set.
+PERSON_TYPES = {"PERSON", "PERSON_NAME"}
 
 
 class ProcessError(Exception):
@@ -30,15 +34,20 @@ class ProcessService:
         self.config = config
         self.store = store
 
-    def detect(self, text: str, system: Optional[str] = None) -> list[Finding]:
-        findings = detect_pii(text)
+    def _allowed_types(self, system: Optional[str]) -> set[str] | None:
         allowed: list[str] | None = None
         if system and system in self.config.systems:
             allowed = self.config.systems[system].pd_types or None
         if not allowed:
             allowed = self.config.default_pd_types or None
-        if allowed:
-            allowed_set = set(allowed)
+        return set(allowed) if allowed else None
+
+    def detect(self, text: str, system: Optional[str] = None) -> list[Finding]:
+        allowed_set = self._allowed_types(system)
+        env_ner = os.getenv("NER_ENABLED", "0") == "1"
+        need_person = allowed_set is None or bool(allowed_set & PERSON_TYPES)
+        findings = detect_pii(text, enable_ner=(env_ner and need_person))
+        if allowed_set:
             findings = [f for f in findings if f.type in allowed_set]
         return findings
 
@@ -90,7 +99,7 @@ class ProcessService:
                 return decrypt(live.original_enc, aad)
             raise ProcessError(409, "payload_id already bound to a different payload")
 
-        log.info("mask payload_id=%s findings=%d", payload_id, len(findings))
+        log.debug("mask payload_id=%s findings=%d", payload_id, len(findings))
         return masked
 
     def proxy_protect(

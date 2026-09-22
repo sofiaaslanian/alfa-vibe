@@ -1,0 +1,88 @@
+{
+  "version": "holdout_v1",
+  "scope": "independent from docs/acceptance_cases.json; do not tune expectations to model output",
+  "offset_unit": "unicode_code_point",
+  "mask_strategy": "dev_redact_v1",
+  "cases": [
+    {
+      "id": "H_MIX_1",
+      "kind": "mixed",
+      "enabled_types": ["PERSON_NAME", "EMAIL", "PHONE"],
+      "payload": "Клиент Сидоров Пётр, email petrov@mail.ru, тел +7 903 111-22-33",
+      "expect_types": ["PERSON_NAME", "EMAIL", "PHONE"],
+      "reason": "человек + email + телефон в одном тексте"
+    },
+    {
+      "id": "H_DUP_1",
+      "kind": "duplicate_values",
+      "enabled_types": ["EMAIL"],
+      "payload": "Пишите на a@b.ru или повторно a@b.ru",
+      "expect_min_findings": 2,
+      "reason": "два одинаковых email — разные offsets"
+    },
+    {
+      "id": "H_EMOJI_1",
+      "kind": "emoji",
+      "enabled_types": ["PHONE"],
+      "payload": "☎️ Связь: +7 926 555-44-33",
+      "expect_types": ["PHONE"],
+      "reason": "emoji до сущности не ломает offsets"
+    },
+    {
+      "id": "H_SPACES_1",
+      "kind": "spaces",
+      "enabled_types": ["INN_PERSON"],
+      "payload": "ИНН клиента:  123456789047",
+      "expect_types": ["INN_PERSON"],
+      "reason": "двойной пробел перед значением"
+    },
+    {
+      "id": "H_HIST_CLIENT_1",
+      "kind": "historical_as_client",
+      "enabled_types": ["PERSON_NAME"],
+      "payload": "Клиент Александр Пушкин просит перевыпуск карты",
+      "expect_types": ["PERSON_NAME"],
+      "reason": "историческое имя в роли клиента — защищать"
+    },
+    {
+      "id": "H_POET_1",
+      "kind": "hard_negative",
+      "enabled_types": ["PERSON_NAME"],
+      "payload": "Александр Пушкин — русский поэт",
+      "expect_types": [],
+      "reason": "поэт — не клиент"
+    },
+    {
+      "id": "H_BANK_ADDR_1",
+      "kind": "hard_negative",
+      "enabled_types": ["ADDRESS"],
+      "payload": "Адрес отделения Банка: г. Москва, ул. Арбат, д. 1",
+      "expect_types": [],
+      "reason": "адрес отделения банка"
+    },
+    {
+      "id": "H_LATIN_CARD_1",
+      "kind": "latin",
+      "enabled_types": ["CARDHOLDER_NAME", "PAYMENT_CARD"],
+      "payload": "Держатель карты: IVAN PETROV, карта 4111 1111 1111 1111",
+      "expect_types": ["CARDHOLDER_NAME", "PAYMENT_CARD"],
+      "reason": "латиница + карта"
+    },
+    {
+      "id": "H_TEXT_DATE_1",
+      "kind": "variation",
+      "enabled_types": ["BIRTH_DATE"],
+      "payload": "Дата рождения: 7 января 1990 года",
+      "expect_types": ["BIRTH_DATE"],
+      "reason": "текстовая дата"
+    },
+    {
+      "id": "H_PASS_SPLIT_1",
+      "kind": "variation",
+      "enabled_types": ["PASSPORT_NUMBER"],
+      "payload": "В паспорте серия 4507, номер 654321",
+      "expect_min_findings": 2,
+      "reason": "серия и номер раздельно"
+    }
+  ]
+}

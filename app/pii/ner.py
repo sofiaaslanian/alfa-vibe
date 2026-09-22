@@ -71,12 +71,26 @@ class PiiNerModel:
         log.info("Loading NER model %s", name)
         device = int(os.getenv("NER_DEVICE", "-1"))
         self.model_name = name
-        self._pipe = pipeline(
-            "token-classification",
-            model=name,
-            aggregation_strategy="simple",
-            device=device,
-        )
+        offline = os.getenv("HF_HUB_OFFLINE", "0") == "1" or os.getenv("TRANSFORMERS_OFFLINE", "0") == "1"
+        # Prefer cached weights (RU servers often have no HF access).
+        try:
+            self._pipe = pipeline(
+                "token-classification",
+                model=name,
+                aggregation_strategy="simple",
+                device=device,
+                model_kwargs={"local_files_only": True},
+            )
+        except Exception:
+            if offline:
+                raise
+            log.warning("NER cache miss — downloading %s", name)
+            self._pipe = pipeline(
+                "token-classification",
+                model=name,
+                aggregation_strategy="simple",
+                device=device,
+            )
 
     def predict(self, text: str) -> list[dict[str, Any]]:
         if not text:

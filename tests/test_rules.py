@@ -51,8 +51,32 @@ def test_pipeline_format_mix():
 
 
 def test_passport_context():
-    assert len(rules.detect_passport("Паспорт клиента: серия 4510 номер 123456")) == 1
+    # labelled series/number → two spans
+    f = rules.detect_passport("Паспорт клиента: серия 4510, номер 123456")
+    assert len(f) == 2
+    assert {("PASSPORT", "4510"), ("PASSPORT", "123456")} == {
+        (x.type, "Паспорт клиента: серия 4510, номер 123456"[x.start : x.end]) for x in f
+    }
     assert rules.detect_passport("Номер заказа: 4510 123456") == []
+
+
+def test_labelled_contextual():
+    assert rules.detect_place_of_birth("Место рождения: Москва")[0].type == "PLACE_OF_BIRTH"
+    assert rules.detect_citizenship("Гражданство клиента: РФ")
+    assert rules.detect_passport_issuer("Паспорт выдан ГУ МВД России по г. Москве")
+    assert rules.detect_cardholder_name("Имя держателя карты: IVAN IVANOV")
+    assert rules.detect_place_of_birth("Конференция пройдёт в Москве") == []
+    assert rules.detect_citizenship("Для участия гражданство РФ не требуется") == []
+
+
+def test_textual_dates_and_negatives():
+    assert rules.detect_birth_date("Клиент родился 3 мая 1998 года.")
+    assert rules.detect_birth_date("Дата публикации: 3 мая 1998 года") == []
+    assert rules.detect_pin("PIN SIM-карты: 9057") == []
+    assert rules.detect_address("Адрес офиса компании: ул. Лесная, д. 5") == []
+    assert rules.detect_inn("Номер договора: 123456789047") == []
+    assert rules.detect_card("Идентификатор операции: 4111111111111111") == []
+    assert rules.detect_email("📧 Почта клиента: anna.petrov+test@example.com")
 
 
 def test_cvv_requires_anchor():

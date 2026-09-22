@@ -10,6 +10,11 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   proxy:
     build: .
@@ -21,9 +26,14 @@ services:
     environment:
       STORAGE_BACKEND: redis
       REDIS_URL: redis://redis:6379/0
+      NER_ENABLED: "0"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+    # CMD from Dockerfile: uvicorn --workers 4 (needs Redis)
 
 volumes:
   redis_data:

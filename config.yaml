@@ -12,12 +12,19 @@ systems:
     allow_demask: true
     mask_style: scoped_token
 
-  # Пример: только format-типы, без demask ответа LLM
+  # Пример: только format-типы, без demask ответа LLM, без NER
   format_only:
     enabled: true
     pd_types: [EMAIL, PHONE, INN, PAYMENT_CARD]
     allow_demask: false
     mask_style: scoped_token
+
+  # Высокий RPS: без PERSON → NER не вызывается
+  high_rps:
+    enabled: true
+    pd_types: [EMAIL, PHONE, INN, PAYMENT_CARD, ADDRESS, BIRTH_DATE, PASSPORT_ISSUE_DATE, PASSPORT, DRIVER_LICENSE, SUBDIVISION_CODE, CVV, PIN, PLACE_OF_BIRTH, CITIZENSHIP, PASSPORT_ISSUER, CARDHOLDER_NAME]
+    allow_demask: true
+    mask_style: dev_redact
 
   disabled_example:
     enabled: false
@@ -39,6 +46,10 @@ default_pd_types:
   - CVV
   - PIN
   - PERSON
+  - PLACE_OF_BIRTH
+  - CITIZENSHIP
+  - PASSPORT_ISSUER
+  - CARDHOLDER_NAME
 
 pd_rules:
   - id: EMAIL
@@ -91,6 +102,22 @@ pd_rules:
     mask: "dev_redact"
   - id: PERSON
     name: ФИО
+    patterns: []
+    mask: "dev_redact"
+  - id: PLACE_OF_BIRTH
+    name: Место рождения
+    patterns: []
+    mask: "dev_redact"
+  - id: CITIZENSHIP
+    name: Гражданство
+    patterns: []
+    mask: "dev_redact"
+  - id: PASSPORT_ISSUER
+    name: Орган выдачи паспорта
+    patterns: []
+    mask: "dev_redact"
+  - id: CARDHOLDER_NAME
+    name: Имя держателя карты
     patterns: []
     mask: "dev_redact"
 

@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.env
+*.md
+docs/*.xlsx
+docs/acceptance_eval_report.json
+ui
+.kilo
+.cursor
+agent-transcripts
