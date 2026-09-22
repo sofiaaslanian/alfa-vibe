@@ -176,11 +176,9 @@ async def process(
         )
 
     start = time.perf_counter()
-    mode = "unknown"
+    mode = "process"
     status = "200"
     try:
-        live = svc.store.get_live("autotest", body.payload_id)
-        mode = "mask" if live is None else "retry_or_demask"
         result = svc.process(body.payload, body.payload_id, system or None)
         return ProcessResponse(result=result)
     except ProcessError as exc:

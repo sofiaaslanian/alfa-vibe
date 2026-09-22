@@ -54,17 +54,15 @@ def classify_fio_parts(tokens: list[str]) -> list[str]:
         if _PATRONYMIC_RE.search(tokens[1]):
             return ["first", "middle"]
         return ["first", "last"]
-    if n >= 3:
-        toks = tokens[:3]
-        if _PATRONYMIC_RE.search(toks[1]):
-            # Иван Иванович Петров
-            return ["first", "middle", "last"]
-        if _PATRONYMIC_RE.search(toks[2]):
-            # Иванов Иван Иванович
-            return ["last", "first", "middle"]
-        # Official form without clear patronymic cue
+    toks = tokens[:3]
+    if _PATRONYMIC_RE.search(toks[1]):
+        # Иван Иванович Петров
+        return ["first", "middle", "last"]
+    if _PATRONYMIC_RE.search(toks[2]):
+        # Иванов Иван Иванович
         return ["last", "first", "middle"]
-    return ["last"] * n
+    # Official form without clear patronymic cue
+    return ["last", "first", "middle"]
 
 
 def split_person_span(

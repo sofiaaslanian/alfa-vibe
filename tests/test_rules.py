@@ -84,8 +84,8 @@ def test_textual_dates_and_negatives():
     assert rules.detect_birth_date("Дата публикации: 3 мая 1998 года") == []
     assert rules.detect_pin("PIN SIM-карты: 9057") == []
     assert rules.detect_address("Адрес офиса компании: ул. Лесная, д. 5") == []
-    assert rules.detect_inn("Номер договора: 123456789047")
-    assert rules.detect_card("Идентификатор операции: 4111111111111111")
+    assert rules.detect_inn("Номер договора: 123456789047") == []
+    assert rules.detect_card("Идентификатор операции: 4111111111111111") == []
     assert rules.detect_email("📧 Почта клиента: anna.petrov+test@example.com")
 
 
