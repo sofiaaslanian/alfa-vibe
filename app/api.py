@@ -181,7 +181,30 @@ async def process(
     try:
         live = svc.store.get_live("autotest", body.payload_id)
         mode = "mask" if live is None else "retry_or_demask"
-        result = svc.process(body.payload, body.payload_id, system or None)
+        trace: dict[str, object] = {}
+        result = svc.process(
+            body.payload, body.payload_id, system or None, trace=trace
+        )
+        log.info(
+            json.dumps(
+                {
+                    "event": "process",
+                    "payload_id": body.payload_id,
+                    "system": system or "autotest",
+                    "mode": trace.get("mode", mode),
+                    "types": trace.get("types", []),
+                    "findings": trace.get("findings", 0),
+                    "detect_ms": trace.get("detect_ms", 0.0),
+                    "mask_ms": trace.get("mask_ms", 0.0),
+                    "state_ms": trace.get("state_ms", 0.0),
+                    "total_ms": trace.get("total_ms", 0.0),
+                    "mask_style": trace.get("mask_style", ""),
+                    "payload_chars": len(body.payload),
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
         return ProcessResponse(result=result)
     except ProcessError as exc:
         status = str(exc.status)
