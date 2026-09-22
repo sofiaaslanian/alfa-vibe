@@ -50,6 +50,11 @@ jobs:
       - name: Acceptance NER=0
         run: python scripts/eval_acceptance.py
 
+      - name: Source-only submission ZIP
+        run: |
+          bash scripts/pack_submission.sh /tmp/alfa_vibe-submission.zip
+          unzip -l /tmp/alfa_vibe-submission.zip | tail -n 3
+
       - name: Start API with Redis
         run: |
           uvicorn app.main:app --host 127.0.0.1 --port 8080 --workers 2 > /tmp/alfa-api.log 2>&1 &
