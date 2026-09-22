@@ -112,13 +112,29 @@ def _cluster_same_type(
     items = sorted([f for f in findings if f.type == typ], key=lambda f: f.start)
     if not items:
         return []
+    # ADDRESS parts leave «ул.»/«д.» in the gap — allow longer labeled gaps.
+    if typ == "ADDRESS":
+        max_gap = 28
+
+    def _gap_ok(gap: str) -> bool:
+        if not gap:
+            return True
+        if all(ch.isspace() or ch in ",.;:—–-" for ch in gap):
+            return True
+        if typ == "ADDRESS" and all(
+            ch.isspace()
+            or ch in ",.;:—–-"
+            or ch.lower() in "абвгдеёжзийклмнопрстуфхцчшщъыьэюя."
+            for ch in gap
+        ):
+            return True
+        return False
+
     clusters: list[list[Finding]] = [[items[0]]]
     for f in items[1:]:
         prev = clusters[-1][-1]
         gap = text[prev.end : f.start]
-        if f.start - prev.end <= max_gap and all(
-            ch.isspace() or ch in ",.;:—–-" for ch in gap
-        ):
+        if f.start - prev.end <= max_gap and _gap_ok(gap):
             clusters[-1].append(f)
         else:
             clusters.append([f])
@@ -298,6 +314,7 @@ def detect_pii(
     fail_closed_on_ner_error: bool | None = None,
 ) -> list[Finding]:
     from app.pii.rules import detect_all_rules
+    from app.pii.validate import sanitize_format_findings
 
     findings = detect_all_rules(text)
     ner = get_ner()
@@ -317,4 +334,40 @@ def detect_pii(
             log.exception("NER detection failed")
             if fail_closed:
                 raise
+    findings = sanitize_format_findings(text, findings)
+    # NER address spans often include «ул.»/«д.» — re-split to value-only parts.
+    from app.pii.parts import split_address_span, split_person_span
+
+    normalized: list[Finding] = []
+    for f in findings:
+        det = (f.detector or "").lower()
+        is_ml = det == "ml" or det.startswith("ml") or "ner" in det or "rubert" in det
+        if f.type == "ADDRESS" and (is_ml or not getattr(f, "part", "")):
+            normalized.extend(
+                split_address_span(
+                    text,
+                    f.start,
+                    f.end,
+                    f.score,
+                    f.detector,
+                    decision=getattr(f, "decision", "mask"),
+                    reason=getattr(f, "reason", "") or "",
+                )
+            )
+            continue
+        if f.type == "PERSON" and " " in text[f.start : f.end]:
+            normalized.extend(
+                split_person_span(
+                    text,
+                    f.start,
+                    f.end,
+                    f.score,
+                    f.detector,
+                    decision=getattr(f, "decision", "mask"),
+                    reason=getattr(f, "reason", "") or "",
+                )
+            )
+            continue
+        normalized.append(f)
+    findings = normalized
     return resolve_overlaps(filter_findings(text, findings))

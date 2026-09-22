@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import statistics
 import sys
 import time
@@ -80,9 +81,21 @@ COMPOSITE_ACCEPT = {
     "DRIVER_LICENSE_NUMBER",
 }
 
+_ADDR_LABEL_RE = re.compile(
+    r"(?i)\b(?:ул|улица|пр|пр\-т|проспект|пер|переулок|ш|шоссе|б\-р|бульвар|"
+    r"наб|пл|площадь|д|дом|кв|квартира|корп|корпус|стр|г|город)\b\.?"
+)
 
-def _alnum_offsets(text: str, start: int, end: int) -> set[int]:
-    return {i for i in range(start, end) if text[i].isalnum()}
+
+def _alnum_offsets(text: str, start: int, end: int, *, typ: str = "") -> set[int]:
+    need = {i for i in range(start, end) if text[i].isalnum()}
+    if typ != "ADDRESS":
+        return need
+    # Labels «ул.»/«д.» are intentional leftovers (org: excess if masked).
+    for m in _ADDR_LABEL_RE.finditer(text[start:end]):
+        for i in range(start + m.start(), start + m.end()):
+            need.discard(i)
+    return need
 
 
 def match_spans(
@@ -104,7 +117,7 @@ def match_spans(
         if typ not in COMPOSITE_ACCEPT:
             still_fn.append((typ, s, e))
             continue
-        need = _alnum_offsets(text, s, e)
+        need = _alnum_offsets(text, s, e, typ=typ)
         if not need:
             still_fn.append((typ, s, e))
             continue
@@ -115,7 +128,7 @@ def match_spans(
         ]
         covered = set()
         for _, gs, ge in parts:
-            covered |= _alnum_offsets(text, gs, ge)
+            covered |= _alnum_offsets(text, gs, ge, typ=typ)
         if need <= covered:
             tp.append((typ, s, e))
             covered_got.update(parts)

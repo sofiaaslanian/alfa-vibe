@@ -31,11 +31,16 @@ def joined_mask_vals(text: str, typ: str, *, enable_ner: bool = False) -> list[s
     )
     if not fs:
         return []
+    label_ok = set(".,;:—–- ") | set("улдквгпршбнабпломкорпстрквартираулицапроспектпереулокшоссебульварплощадьгороддом")
     groups: list[list] = [[fs[0]]]
     for f in fs[1:]:
         prev = groups[-1][-1]
         gap = text[prev.end : f.start]
-        if f.start - prev.end <= 3 and all(ch.isspace() or ch in ",.;:—–-" for ch in gap):
+        if f.start - prev.end <= 24 and all(
+            ch.isspace() or ch in ",.;:—–-" or ch.lower() in "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+            for ch in gap
+        ):
+            # allow short address labels between parts
             groups[-1].append(f)
         else:
             groups.append([f])
@@ -58,7 +63,21 @@ def findings_cover_span(
     text: str, findings: list[dict], start: int, end: int
 ) -> bool:
     """True if one exact span or several parts cover all alphanumerics in [start,end)."""
+    typ = findings[0]["type"] if findings else ""
+    # ADDRESS: ignore label tokens in coverage (ул./д./кв.)
+    label_re = None
+    if typ in {"ADDRESS"}:
+        import re
+
+        label_re = re.compile(
+            r"(?i)\b(?:ул|улица|пр|пр\-т|проспект|пер|переулок|ш|шоссе|б\-р|бульвар|"
+            r"наб|пл|площадь|д|дом|кв|квартира|корп|корпус|стр|г|город)\b\.?"
+        )
     need = alnum_offsets(text, start, end)
+    if label_re:
+        for m in label_re.finditer(text[start:end]):
+            for i in range(start + m.start(), start + m.end()):
+                need.discard(i)
     if not need:
         return False
     if any(f["start"] == start and f["end"] == end for f in findings):

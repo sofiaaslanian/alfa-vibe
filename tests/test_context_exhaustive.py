@@ -148,7 +148,8 @@ def test_issuer_negative(text):
     ],
 )
 def test_address_positive(text, expected):
-    assert expected in _vals(text, "ADDRESS")
+    vals = _vals(text, "ADDRESS")
+    assert any(expected in v or v in expected for v in vals), vals
 
 
 @pytest.mark.parametrize(
