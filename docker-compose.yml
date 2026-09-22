@@ -1,23 +1,19 @@
-version: "3.9"
-
 services:
   redis:
     image: redis:7-alpine
-    container_name: alfa-redis
-    # Not published to host — backend reaches redis:6379 on the compose network.
     command:
-      [
-        "redis-server",
-        "--appendonly",
-        "yes",
-        "--maxmemory",
-        "512mb",
-        "--maxmemory-policy",
-        "noeviction",
-      ]
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - "${REDIS_MAXMEMORY:-1gb}"
+      - --maxmemory-policy
+      - noeviction
     volumes:
       - redis_data:/data
     restart: unless-stopped
+    networks:
+      - backend
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -26,28 +22,62 @@ services:
 
   proxy:
     build: .
-    container_name: alfa-proxy
-    ports:
-      - "8080:8080"
     env_file:
       - .env
     environment:
       STORAGE_BACKEND: redis
       REDIS_URL: redis://redis:6379/0
-      # Autotest load: keep NER off. Demo quality: NER_ENABLED=1 + ner deps.
-      NER_ENABLED: ${NER_ENABLED:-0}
+      # Public AlfaSonar path: keep NER off; the slim image has no torch.
+      NER_ENABLED: "${NER_ENABLED:-0}"
       NER_LOCAL: "1"
       NER_FAIL_CLOSED: "0"
-      # Auth only for /proxy and /demo — /process is open for AlfaSonar.
-      PROXY_API_KEYS: ${PROXY_API_KEYS:-demo-key}
-      PROCESS_CONCURRENCY: ${PROCESS_CONCURRENCY:-180}
+      PROXY_API_KEYS: "${PROXY_API_KEYS:-demo-key}"
+      PROCESS_CONCURRENCY: "${PROCESS_CONCURRENCY:-180}"
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
+    expose:
+      - "8080"
     depends_on:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    # CMD from Dockerfile: uvicorn --workers 4 (needs Redis)
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/ready', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: "${DOMAIN:?Set DOMAIN in .env}"
+      ACME_EMAIL: "${ACME_EMAIL:?Set ACME_EMAIL in .env}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      proxy:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backend
+
+networks:
+  backend:
 
 volumes:
   redis_data:
+  caddy_data:
+  caddy_config:
