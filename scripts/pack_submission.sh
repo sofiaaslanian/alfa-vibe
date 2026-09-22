@@ -38,7 +38,13 @@ find "$STAGE" -type f \( -name '*.pyc' -o -name '.DS_Store' -o -name '*.zip' -o 
 echo "Wrote $OUT"
 
 # Hard fail if forbidden artifacts slipped in.
-if unzip -l "$OUT" | grep -E '(^|/)(\.env|\.git|\.venv|venv|node_modules|__pycache__)(/|$)|\.(zip|xlsx|png|jpg|jpeg|gif|webp|pyc)$'; then
+if unzip -Z1 "$OUT" | grep -E '(^|/)(\.env|\.git|\.venv|venv|node_modules|__pycache__)(/|$)|\.(zip|xlsx|png|jpg|jpeg|gif|webp|pyc)
+  echo "ERROR: forbidden artifact found in submission ZIP"
+  exit 1
+fi
+
+echo "OK: source-only archive; no secrets, media archives, binary media, xlsx or caches"
+; then
   echo "ERROR: forbidden artifact found in submission ZIP"
   exit 1
 fi
