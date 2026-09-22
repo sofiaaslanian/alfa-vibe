@@ -1528,8 +1528,35 @@ RULE_DETECTORS = [
 ]
 
 
+# For long payloads, skip context detectors only when a mandatory lexical
+# anchor is absent. These hints are a performance gate, not a policy gate:
+# every listed detector's regex/role logic requires at least one hint below.
+_LONG_TEXT_HINTS = {
+    detect_address: ("ул.", "улиц", "просп", "переул", "шоссе", "бульвар", "набереж", "площад", "дом ", "д.", "кв.", "квартира", "адрес"),
+    detect_birth_date: ("рожден", "родил", "birth_date", "др"),
+    detect_passport_issue_date: ("выдан", "выдач"),
+    detect_passport: ("паспорт", "пасп.", "серия"),
+    detect_subdivision: ("подраздел",),
+    detect_driver_license: ("водительск", "удостоверен", "права", "ву", "в/у"),
+    detect_cvv: ("cvv", "cvc", "цвс", "код безопасности", "оборот", "сзади"),
+    detect_pin: ("pin", "пин"),
+    detect_snils: ("снилс", "страховой номер", "пенсион"),
+    detect_international_passport: ("загран", "заграничн"),
+    detect_oms: ("омс", "медицинск"),
+    detect_place_of_birth: ("место рожден", "родил", "рожден", "place of birth", "birth place"),
+    detect_citizenship: ("граждан", "citizen"),
+    detect_passport_issuer: ("выдан", "выдач", "выдавш"),
+    detect_cardholder_name: ("держател", "имя на карт", "embossed", "name on card", "cardholder"),
+}
+
+
 def detect_all_rules(text: str) -> list[Finding]:
     findings: list[Finding] = []
+    lower = text.lower() if len(text) >= 16_384 else None
     for detector in RULE_DETECTORS:
+        if lower is not None:
+            hints = _LONG_TEXT_HINTS.get(detector)
+            if hints and not any(hint in lower for hint in hints):
+                continue
         findings.extend(detector(text))
     return findings
