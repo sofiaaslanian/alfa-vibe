@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Доказательства — Alfa PD</title>
+  <link rel="stylesheet" href="/ui/styles.css" />
+  <link rel="stylesheet" href="/ui/pd.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidenav">
+      <div class="sidenav__brand">
+        <img class="sidenav__logo" src="/ui/icons/alfa-logo.png" alt="Альфа-Банк" />
+      </div>
+      <div class="sidenav__scroll">
+        <div class="sidenav__group">
+          <div class="sidenav__label">Демо</div>
+          <nav class="sidenav__nav">
+            <a class="sidenav__link" href="/">
+              <img class="ui-icon" src="/ui/icons/Shield- 192x192.png" alt="" />
+              <span class="sidenav__link-text">Контур</span>
+            </a>
+            <a class="sidenav__link sidenav__link--active" href="/evidence">
+              <img class="ui-icon" src="/ui/icons/Trend Up- 192x192.png" alt="" />
+              <span class="sidenav__link-text">Доказательства</span>
+              <span class="sidenav__badge">68</span>
+            </a>
+          </nav>
+        </div>
+        <div class="sidenav__group">
+          <div class="sidenav__label">Сервис</div>
+          <nav class="sidenav__nav">
+            <a class="sidenav__link" href="/metrics" target="_blank" rel="noopener">
+              <img class="ui-icon" src="/ui/icons/Apps- 192x192.png" alt="" />
+              <span class="sidenav__link-text">Metrics</span>
+            </a>
+          </nav>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="main__top">
+        <div>
+          <h1 class="main__title">Доказательства</h1>
+          <p class="main__date">Живые метрики и acceptance — не официальный балл жюри</p>
+        </div>
+        <div class="main__toolbar">
+          <div class="main__profile">
+            <div class="main__profile-photo-wrap">
+              <img class="main__profile-photo" src="/ui/photos/maria-profile.png" alt="" width="44" height="44" />
+            </div>
+            <div class="main__profile-text">
+              <div class="main__profile-name">Мария Кузнецова</div>
+              <div class="main__profile-role">Security</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pd-kpis">
+        <div class="pd-kpi">
+          <div class="pd-kpi__label">Ready</div>
+          <div class="pd-kpi__value" id="kpi-ready">—</div>
+        </div>
+        <div class="pd-kpi">
+          <div class="pd-kpi__label">Requests</div>
+          <div class="pd-kpi__value" id="kpi-requests">—</div>
+        </div>
+        <div class="pd-kpi">
+          <div class="pd-kpi__label">Avg latency</div>
+          <div class="pd-kpi__value" id="kpi-latency">—</div>
+        </div>
+        <div class="pd-kpi">
+          <div class="pd-kpi__label">Tokens est.</div>
+          <div class="pd-kpi__value" id="kpi-tokens">—</div>
+        </div>
+      </div>
+
+      <div class="pd-stack">
+        <div class="pd-row">
+          <section class="pd-card" id="acceptance"></section>
+          <section class="pd-card">
+            <h2 class="pd-card__title">Holdout</h2>
+            <p class="pd-status" id="holdout">—</p>
+          </section>
+        </div>
+        <section class="pd-card" id="load"></section>
+        <section class="pd-card" id="criteria"></section>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="/ui/js/evidence.js"></script>
+</body>
+</html>

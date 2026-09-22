@@ -1,0 +1,119 @@
+{
+  "cases_total": 68,
+  "cases_passed": 68,
+  "case_pass_rate": 1.0,
+  "span_metrics": {
+    "tp": 36,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  },
+  "mask_accuracy": 1.0,
+  "roundtrip_rate": 1.0,
+  "by_type": {
+    "PERSON_NAME": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "PLACE_OF_BIRTH": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "CITIZENSHIP": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "PASSPORT_ISSUER": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "ADDRESS": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "CARDHOLDER_NAME": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "BIRTH_DATE": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "PASSPORT_NUMBER": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "SUBDIVISION_CODE": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "PASSPORT_ISSUE_DATE": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "DRIVER_LICENSE_NUMBER": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "CVV": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "CARD_PIN": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "EMAIL": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "PHONE": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "INN_PERSON": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    },
+    "PAYMENT_CARD": {
+      "passed": 4,
+      "cases": 4,
+      "f1": 1.0,
+      "failed_ids": []
+    }
+  }
+}

@@ -9,13 +9,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1
 
+RUN apt-get update && apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY config.yaml .
 COPY scripts ./scripts
-COPY docs/acceptance_cases.json docs/holdout_cases.json ./docs/
+COPY ui ./ui
+RUN cd ui && unzip -q -o icons.zip -d icons && unzip -q -o photos.zip -d photos
+COPY docs/acceptance_cases.json docs/holdout_cases.json docs/acceptance_summary.json \
+     docs/load_results.json docs/criteria_checklist.json ./docs/
 COPY .env.example .
 
 EXPOSE 8080

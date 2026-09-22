@@ -1,0 +1,69 @@
+{
+  "criteria": [
+    {
+      "id": "3.1",
+      "title": "Качество ID и маскирования",
+      "max": 6,
+      "status": "measured",
+      "evidence": "68/68 acceptance, span F1=1.0, mask 100%",
+      "team_estimate": 5.5
+    },
+    {
+      "id": "3.2",
+      "title": "Корректность демаскирования",
+      "max": 3,
+      "status": "measured",
+      "evidence": "round-trip 100% on 68 cases + /process demask",
+      "team_estimate": 3
+    },
+    {
+      "id": "3.3",
+      "title": "Точность и вариации",
+      "max": 4,
+      "status": "measured",
+      "evidence": "traps covered in 68 + holdout (Pushkin, bank address, text dates)",
+      "team_estimate": 3.5
+    },
+    {
+      "id": "3.4",
+      "title": "Гибкая настройка",
+      "max": 4,
+      "status": "partial",
+      "evidence": "README + systems in config.yaml; types still code-backed",
+      "team_estimate": 3
+    },
+    {
+      "id": "3.5",
+      "title": "Производительность и SLA",
+      "max": 4,
+      "status": "partial",
+      "evidence": "local create≈2060 RPS; RU load not_run",
+      "team_estimate": 2.5
+    },
+    {
+      "id": "3.6",
+      "title": "Безопасность и метрики",
+      "max": 3,
+      "status": "measured",
+      "evidence": "/metrics Latency/RPS/TPS, allowlist keys, AES-GCM state",
+      "team_estimate": 2.5
+    },
+    {
+      "id": "3.7",
+      "title": "Расширенные сценарии",
+      "max": 3,
+      "status": "partial",
+      "evidence": "scoped tokens + per-system; RPS2000@NER not proven",
+      "team_estimate": 1.5
+    },
+    {
+      "id": "3.8",
+      "title": "Демо и презентация",
+      "max": 3,
+      "status": "partial",
+      "evidence": "UI contour + proxy; live defense TBD",
+      "team_estimate": 2.5
+    }
+  ],
+  "disclaimer": "Оценка команды, не балл жюри. Не использовать как официальный score."
+}

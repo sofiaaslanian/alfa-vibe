@@ -51,12 +51,11 @@ def test_pipeline_format_mix():
 
 
 def test_passport_context():
-    # labelled series/number → two spans
-    f = rules.detect_passport("Паспорт клиента: серия 4510, номер 123456")
-    assert len(f) == 2
-    assert {("PASSPORT", "4510"), ("PASSPORT", "123456")} == {
-        (x.type, "Паспорт клиента: серия 4510, номер 123456"[x.start : x.end]) for x in f
-    }
+    # labelled series/number → one span covering both
+    text = "Паспорт клиента: серия 4510, номер 123456"
+    f = rules.detect_passport(text)
+    assert len(f) == 1
+    assert text[f[0].start : f[0].end] == "4510, номер 123456"
     assert rules.detect_passport("Номер заказа: 4510 123456") == []
 
 

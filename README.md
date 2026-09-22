@@ -2,6 +2,14 @@
 
 Прокси: **detect → mask → (LLM) → demask**. Маска автотеста: `dev_redact_v1` (буквы/цифры → `*`).
 
+## Demo UI
+
+После старта сервиса:
+- Контур (скринкаст): http://localhost:8080/
+- Доказательства: http://localhost:8080/evidence
+
+`X-API-Key` по умолчанию `demo-key` (см. `.env`). Чекбокс «Без LLM» — безопасный прогон без AlfaGen.
+
 ## Быстрый старт
 
 ```bash

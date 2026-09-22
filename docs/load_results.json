@@ -1,0 +1,55 @@
+{
+  "updated_at": "2026-09-22",
+  "note": "Fill after RU load_smoke runs. Local numbers are not jury evidence.",
+  "profiles": [
+    {
+      "name": "local_create_c40",
+      "host": "local",
+      "mode": "create",
+      "n": 400,
+      "concurrency": 40,
+      "rps": 2060.0,
+      "p50_ms": 17.2,
+      "p95_ms": 28.4,
+      "p99_ms": 34.7,
+      "ner": false
+    },
+    {
+      "name": "local_pair_c40",
+      "host": "local",
+      "mode": "pair",
+      "n": 400,
+      "concurrency": 40,
+      "rps": 928.3,
+      "p50_ms": 39.6,
+      "p95_ms": 64.5,
+      "p99_ms": 79.6,
+      "ner": false
+    },
+    {
+      "name": "local_100k_create",
+      "host": "local",
+      "mode": "create",
+      "profile": "100k",
+      "n": 10,
+      "concurrency": 2,
+      "rps": 3.7,
+      "p50_ms": 479.1,
+      "p95_ms": 481.6,
+      "approx_tokens": 99991,
+      "ner": false
+    },
+    {
+      "name": "ru_create_pending",
+      "host": "ru",
+      "mode": "create",
+      "status": "not_run",
+      "rps": null,
+      "p95_ms": null
+    }
+  ],
+  "targets": {
+    "rps": 1000,
+    "p95_ms": 500
+  }
+}

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Контур защиты — Alfa PD</title>
+  <link rel="stylesheet" href="/ui/styles.css" />
+  <link rel="stylesheet" href="/ui/pd.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidenav">
+      <div class="sidenav__brand">
+        <img class="sidenav__logo" src="/ui/icons/alfa-logo.png" alt="Альфа-Банк" />
+      </div>
+      <div class="sidenav__scroll">
+        <div class="sidenav__group">
+          <div class="sidenav__label">Демо</div>
+          <nav class="sidenav__nav">
+            <a class="sidenav__link sidenav__link--active" href="/">
+              <img class="ui-icon" src="/ui/icons/Shield- 192x192.png" alt="" />
+              <span class="sidenav__link-text">Контур</span>
+            </a>
+            <a class="sidenav__link" href="/evidence">
+              <img class="ui-icon" src="/ui/icons/Trend Up- 192x192.png" alt="" />
+              <span class="sidenav__link-text">Доказательства</span>
+              <span class="sidenav__badge">68</span>
+            </a>
+          </nav>
+        </div>
+        <div class="sidenav__group">
+          <div class="sidenav__label">Сервис</div>
+          <nav class="sidenav__nav">
+            <a class="sidenav__link" href="/docs" target="_blank" rel="noopener">
+              <img class="ui-icon" src="/ui/icons/File Document- 192x192.png" alt="" />
+              <span class="sidenav__link-text">API docs</span>
+            </a>
+            <a class="sidenav__link" href="/metrics" target="_blank" rel="noopener">
+              <img class="ui-icon" src="/ui/icons/Apps- 192x192.png" alt="" />
+              <span class="sidenav__link-text">Metrics</span>
+            </a>
+          </nav>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="main__top">
+        <div>
+          <h1 class="main__title">Контур защиты ПД</h1>
+          <p class="main__date">Consumer → Detect → Mask → LLM → Unmask</p>
+        </div>
+        <div class="main__toolbar">
+          <button class="main__icon-btn" type="button" aria-label="Поиск">
+            <img class="ui-icon" src="/ui/icons/Search- 192x192.png" alt="" />
+          </button>
+          <button class="main__icon-btn" type="button" aria-label="Уведомления">
+            <img class="ui-icon" src="/ui/icons/Notification- 192x192.png" alt="" />
+          </button>
+          <div class="main__profile">
+            <div class="main__profile-photo-wrap">
+              <img class="main__profile-photo" src="/ui/photos/maria-profile.png" alt="" width="44" height="44" />
+            </div>
+            <div class="main__profile-text">
+              <div class="main__profile-name">Мария Кузнецова</div>
+              <div class="main__profile-role">Security</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pd-flow">
+        <b>Consumer</b><span class="pd-flow__sep"></span>
+        <b>Detect</b><span class="pd-flow__sep"></span>
+        <b>Mask</b><span class="pd-flow__sep"></span>
+        <b>LLM</b><span class="pd-flow__sep"></span>
+        <b>Unmask</b><span class="pd-flow__sep"></span>
+        <b>Consumer</b>
+      </div>
+
+      <div class="pd-grid">
+        <section class="pd-card">
+          <h2 class="pd-card__title">Система-потребитель</h2>
+          <label class="field">
+            <span class="field__label">Система</span>
+            <select class="input" id="system"></select>
+          </label>
+          <label class="field">
+            <span class="field__label">X-API-Key</span>
+            <input class="input" id="api-key" type="text" autocomplete="off" />
+          </label>
+          <div>
+            <div class="field__label">Сценарии скринкаста</div>
+            <div class="pd-chips" id="chips"></div>
+          </div>
+          <label class="field">
+            <span class="field__label">Запрос с ПД</span>
+            <textarea class="textarea" id="input" style="min-height:140px"></textarea>
+          </label>
+          <label class="pd-check">
+            <input type="checkbox" id="skip-llm" checked />
+            Без вызова LLM — только контур
+          </label>
+          <button class="btn btn--primary" id="run" type="button">
+            <img class="ui-icon ui-icon--on-primary" src="/ui/icons/Lightning 1- 192x192.png" alt="" width="20" height="20" style="filter:brightness(0) invert(1)" />
+            Прогнать контур
+          </button>
+          <div class="pd-status" id="status"></div>
+        </section>
+
+        <section class="pd-card">
+          <h2 class="pd-card__title">Модуль — рентген</h2>
+          <div class="pd-stages">
+            <div class="pd-stage" id="stage-detect"><div class="pd-stage__name">Detect</div><div class="pd-stage__ms">—</div></div>
+            <div class="pd-stage" id="stage-mask"><div class="pd-stage__name">Mask</div><div class="pd-stage__ms">—</div></div>
+            <div class="pd-stage" id="stage-state"><div class="pd-stage__name">State</div><div class="pd-stage__ms">—</div></div>
+            <div class="pd-stage" id="stage-llm"><div class="pd-stage__name">LLM</div><div class="pd-stage__ms">—</div></div>
+            <div class="pd-stage" id="stage-demask"><div class="pd-stage__name">Unmask</div><div class="pd-stage__ms">—</div></div>
+          </div>
+          <div class="field__label">Findings</div>
+          <div class="pd-findings" id="findings"></div>
+          <div class="field__label">Masked preview</div>
+          <div class="pd-mono pd-mono--dark" id="masked"></div>
+        </section>
+
+        <section class="pd-card">
+          <h2 class="pd-card__title">Wire → LLM</h2>
+          <div id="leak-badge" class="badge badge--warn">ожидание прогона</div>
+          <div class="field__label">Masked prompt</div>
+          <div class="pd-mono pd-mono--dark" id="llm-wire"></div>
+          <div class="field__label">Ответ модели / stub</div>
+          <div class="pd-mono" id="answer"></div>
+        </section>
+      </div>
+
+      <div class="pd-bottom">
+        <section class="pd-card">
+          <h2 class="pd-card__title">Ответ потребителю после Unmask</h2>
+          <div class="pd-mono" id="restored"></div>
+        </section>
+        <section class="pd-card">
+          <h2 class="pd-card__title">Оригинал для сверки</h2>
+          <div class="pd-mono" id="original-compare"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="/ui/js/contour.js"></script>
+</body>
+</html>

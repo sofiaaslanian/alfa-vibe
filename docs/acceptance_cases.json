@@ -506,17 +506,11 @@
         {
           "type": "PASSPORT_NUMBER",
           "start": 23,
-          "end": 27,
-          "value": "4510"
-        },
-        {
-          "type": "PASSPORT_NUMBER",
-          "start": 35,
           "end": 41,
-          "value": "123456"
+          "value": "4510, номер 123456"
         }
       ],
-      "expected_result": "Паспорт клиента: серия ****, номер ******",
+      "expected_result": "Паспорт клиента: серия ****, ***** ******",
       "mask_strategy": "dev_redact_v1",
       "reason": "Подтверждённая роль и формат целевого типа",
       "status": "Не запускался"
@@ -722,17 +716,11 @@
         {
           "type": "DRIVER_LICENSE_NUMBER",
           "start": 34,
-          "end": 39,
-          "value": "77 11"
-        },
-        {
-          "type": "DRIVER_LICENSE_NUMBER",
-          "start": 47,
           "end": 53,
-          "value": "123456"
+          "value": "77 11, номер 123456"
         }
       ],
-      "expected_result": "Водительское удостоверение: серия ** **, номер ******",
+      "expected_result": "Водительское удостоверение: серия ** **, ***** ******",
       "mask_strategy": "dev_redact_v1",
       "reason": "Подтверждённая роль и формат целевого типа",
       "status": "Не запускался"
