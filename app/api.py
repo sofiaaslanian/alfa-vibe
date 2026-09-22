@@ -129,6 +129,23 @@ def _api_key_ok(x_api_key: str | None) -> bool:
     return bool(x_api_key and x_api_key in allowed)
 
 
+def _should_log_process(payload_id: str) -> bool:
+    """Deterministic sampling: metrics remain 100%, stdout logging is bounded."""
+    try:
+        rate = float(os.getenv("PROCESS_LOG_SAMPLE_RATE", "1.0"))
+    except ValueError:
+        rate = 1.0
+    rate = min(max(rate, 0.0), 1.0)
+    if rate <= 0.0:
+        return False
+    if rate >= 1.0:
+        return True
+    bucket = int.from_bytes(
+        hashlib.sha256(payload_id.encode("utf-8")).digest()[:8], "big"
+    ) / float(1 << 64)
+    return bucket < rate
+
+
 def _read_json(path: Path):
     if not path.exists():
         return None
@@ -189,26 +206,27 @@ async def process(
             trace=trace,
         )
         mode = str(trace.get("mode", mode))
-        log.info(
-            json.dumps(
-                {
-                    "event": "process",
-                    "payload_id_hash": hashlib.sha256(body.payload_id.encode("utf-8")).hexdigest()[:12],
-                    "system": system or "autotest",
-                    "mode": trace.get("mode", mode),
-                    "types": trace.get("types", []),
-                    "findings": trace.get("findings", 0),
-                    "detect_ms": trace.get("detect_ms", 0.0),
-                    "mask_ms": trace.get("mask_ms", 0.0),
-                    "state_ms": trace.get("state_ms", 0.0),
-                    "total_ms": trace.get("total_ms", 0.0),
-                    "mask_style": trace.get("mask_style", ""),
-                    "payload_chars": len(body.payload),
-                },
-                ensure_ascii=False,
-                separators=(",", ":"),
+        if _should_log_process(body.payload_id):
+            log.info(
+                json.dumps(
+                    {
+                        "event": "process",
+                        "payload_id_hash": hashlib.sha256(body.payload_id.encode("utf-8")).hexdigest()[:12],
+                        "system": system or "autotest",
+                        "mode": trace.get("mode", mode),
+                        "types": trace.get("types", []),
+                        "findings": trace.get("findings", 0),
+                        "detect_ms": trace.get("detect_ms", 0.0),
+                        "mask_ms": trace.get("mask_ms", 0.0),
+                        "state_ms": trace.get("state_ms", 0.0),
+                        "total_ms": trace.get("total_ms", 0.0),
+                        "mask_style": trace.get("mask_style", ""),
+                        "payload_chars": len(body.payload),
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
             )
-        )
         return ProcessResponse(result=result)
     except ProcessError as exc:
         status = str(exc.status)
