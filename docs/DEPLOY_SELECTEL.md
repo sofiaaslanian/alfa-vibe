@@ -130,7 +130,7 @@ Clone the deployment branch:
 ```bash
 sudo mkdir -p /opt/alfa-vibe
 sudo chown "$USER":"$USER" /opt/alfa-vibe
-git clone --branch deploy/selectel-vps git@github-alfa-vibe:sofiaaslanian/alfa-vibe.git /opt/alfa-vibe
+git clone --branch main git@github-alfa-vibe:sofiaaslanian/alfa-vibe.git /opt/alfa-vibe
 cd /opt/alfa-vibe
 ```
 
@@ -208,13 +208,12 @@ python scripts/load_smoke.py --url https://<domain> --profile 100k --mode create
 
 Record the server resources, commit SHA, p50/p95/p99, RPS and error rate.
 
-## 11. Update after merge
+## 11. Update from main
 
-After the deployment PR is verified and merged:
+After each stable commit is merged into `main`:
 
 ```bash
 cd /opt/alfa-vibe
-git switch main
 git pull --ff-only origin main
 sudo docker compose up -d --build
 sudo docker compose ps
