@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 
 from app.pii.detect import Finding
+from app.pii.ids.card import validate_card_digits
+from app.pii.ids.inn import validate_inn12
 
 _EMAIL_OK_RE = re.compile(
     r"(?i)^[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?"
@@ -69,13 +71,9 @@ def accept_format_finding(text: str, f: Finding) -> bool:
         return True
 
     if f.type == "INN":
-        from app.pii.ids.inn import validate_inn12
-
         return validate_inn12(value)
 
     if f.type == "PAYMENT_CARD":
-        from app.pii.ids.card import validate_card_digits
-
         d = _digits(value)
         if not (13 <= len(d) <= 19):
             return False
@@ -104,8 +102,12 @@ def sanitize_format_findings(text: str, findings: list[Finding]) -> list[Finding
     out: list[Finding] = []
     for f in findings:
         det = (f.detector or "").lower()
-        if det == "ml" or det.startswith("ml") or "ner" in det or "rubert" in det:
-            if not accept_format_finding(text, f):
-                continue
-        out.append(f)
+        is_ml = (
+            det == "ml"
+            or det.startswith("ml")
+            or "ner" in det
+            or "rubert" in det
+        )
+        if not is_ml or accept_format_finding(text, f):
+            out.append(f)
     return out
