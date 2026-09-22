@@ -166,7 +166,7 @@ async def process(
 
     sem = _process_semaphore()
     try:
-        await asyncio.wait_for(sem.acquire(), timeout=0.002)
+        await asyncio.wait_for(sem.acquire(), timeout=0.025)
     except TimeoutError:
         RPS.labels(route="process", mode="reject", status="429").inc()
         return JSONResponse(
