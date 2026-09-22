@@ -25,6 +25,7 @@ def test_process_overload_returns_429_with_retry_after(monkeypatch):
 
 def test_process_log_has_types_and_timings_without_raw_pii(monkeypatch, caplog):
     monkeypatch.setenv("STORAGE_BACKEND", "memory")
+    monkeypatch.setenv("PROCESS_LOG_SAMPLE_RATE", "1")
     api._process_sem = None
     caplog.set_level(logging.INFO, logger="uvicorn.error")
 
