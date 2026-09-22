@@ -33,4 +33,4 @@ COPY .env.example .
 EXPOSE 8080
 
 # Multi-worker; Redis required for shared state (see docker-compose).
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "4"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "4", "--no-access-log"]
