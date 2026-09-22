@@ -40,7 +40,7 @@ services:
       NER_FAIL_CLOSED: "0"
       # Auth only for /proxy and /demo — /process is open for AlfaSonar.
       PROXY_API_KEYS: ${PROXY_API_KEYS:-demo-key}
-      PROCESS_CONCURRENCY: ${PROCESS_CONCURRENCY:-180}
+      PROCESS_CONCURRENCY: ${PROCESS_CONCURRENCY:-48}
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
     depends_on:
