@@ -25,7 +25,7 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379/0
       STATE_HMAC_KEY: ci-hmac-key
       STATE_ENC_KEY: ci-enc-key
-      PROCESS_CONCURRENCY: "180"
+      PROCESS_CONCURRENCY: "48"
       PROXY_API_KEYS: demo-key
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
