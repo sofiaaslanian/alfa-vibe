@@ -22,7 +22,7 @@ for f in Dockerfile docker-compose.yml config.yaml pytest.ini requirements.txt r
   [ -f "$f" ] && cp "$f" "$STAGE/$f"
 done
 
-# Small documentation/evidence files only. No xlsx, zip, images, datasets, dumps.
+# Small documentation files only. No datasets, spreadsheets, archives or media.
 for f in docs/START_HERE.md docs/ARCHITECTURE.md docs/DETECTION.md docs/HACKATHON_BRIEF.md; do
   [ -f "$f" ] && cp "$f" "$STAGE/docs/"
 done
@@ -37,16 +37,11 @@ find "$STAGE" -type f \( -name '*.pyc' -o -name '.DS_Store' -o -name '*.zip' -o 
 
 echo "Wrote $OUT"
 
-# Hard fail if forbidden artifacts slipped in.
-if unzip -Z1 "$OUT" | grep -E '(^|/)(\.env|\.git|\.venv|venv|node_modules|__pycache__)(/|$)|\.(zip|xlsx|png|jpg|jpeg|gif|webp|pyc)
+# Inspect archive members only, not unzip's own "Archive: ...zip" header.
+FORBIDDEN_RE='(^|/)(\.env|\.git|\.venv|venv|node_modules|__pycache__)(/|$)|\.(zip|xlsx|png|jpg|jpeg|gif|webp|pyc)$'
+if unzip -Z1 "$OUT" | grep -E "$FORBIDDEN_RE"; then
   echo "ERROR: forbidden artifact found in submission ZIP"
   exit 1
 fi
 
-echo "OK: source-only archive; no secrets, media archives, binary media, xlsx or caches"
-; then
-  echo "ERROR: forbidden artifact found in submission ZIP"
-  exit 1
-fi
-
-echo "OK: source-only archive; no secrets, media archives, binary media, xlsx or caches"
+echo "OK: source-only archive; no secrets, media, archives, xlsx or caches"
