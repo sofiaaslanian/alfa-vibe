@@ -303,6 +303,54 @@ def get_ner():
     return _ner
 
 
+def _normalize_structured_findings(
+    text: str,
+    findings: list[Finding],
+) -> list[Finding]:
+    """Split composite PERSON/ADDRESS spans into value-only structural parts."""
+    from app.pii.parts import split_address_span, split_person_span
+
+    normalized: list[Finding] = []
+    for finding in findings:
+        detector = (finding.detector or "").lower()
+        is_ml = (
+            detector == "ml"
+            or detector.startswith("ml")
+            or "ner" in detector
+            or "rubert" in detector
+        )
+        if finding.type == "ADDRESS" and (
+            is_ml or not getattr(finding, "part", "")
+        ):
+            normalized.extend(
+                split_address_span(
+                    text,
+                    finding.start,
+                    finding.end,
+                    finding.score,
+                    finding.detector,
+                    decision=getattr(finding, "decision", "mask"),
+                    reason=getattr(finding, "reason", "") or "",
+                )
+            )
+            continue
+        if finding.type == "PERSON" and " " in text[finding.start : finding.end]:
+            normalized.extend(
+                split_person_span(
+                    text,
+                    finding.start,
+                    finding.end,
+                    finding.score,
+                    finding.detector,
+                    decision=getattr(finding, "decision", "mask"),
+                    reason=getattr(finding, "reason", "") or "",
+                )
+            )
+            continue
+        normalized.append(finding)
+    return normalized
+
+
 def detect_pii(
     text: str,
     *,
@@ -331,39 +379,5 @@ def detect_pii(
             if fail_closed:
                 raise
     findings = sanitize_format_findings(text, findings)
-    # NER address spans often include «ул.»/«д.» — re-split to value-only parts.
-    from app.pii.parts import split_address_span, split_person_span
-
-    normalized: list[Finding] = []
-    for f in findings:
-        det = (f.detector or "").lower()
-        is_ml = det == "ml" or det.startswith("ml") or "ner" in det or "rubert" in det
-        if f.type == "ADDRESS" and (is_ml or not getattr(f, "part", "")):
-            normalized.extend(
-                split_address_span(
-                    text,
-                    f.start,
-                    f.end,
-                    f.score,
-                    f.detector,
-                    decision=getattr(f, "decision", "mask"),
-                    reason=getattr(f, "reason", "") or "",
-                )
-            )
-            continue
-        if f.type == "PERSON" and " " in text[f.start : f.end]:
-            normalized.extend(
-                split_person_span(
-                    text,
-                    f.start,
-                    f.end,
-                    f.score,
-                    f.detector,
-                    decision=getattr(f, "decision", "mask"),
-                    reason=getattr(f, "reason", "") or "",
-                )
-            )
-            continue
-        normalized.append(f)
-    findings = normalized
+    findings = _normalize_structured_findings(text, findings)
     return resolve_overlaps(filter_findings(text, findings))
