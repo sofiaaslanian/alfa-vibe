@@ -1,0 +1,7 @@
+# Temporary public HTTP deployment without a domain.
+# Start only Redis and the proxy:
+# docker compose -f docker-compose.yml -f docker-compose.http.yml up -d --build redis proxy
+services:
+  proxy:
+    ports:
+      - "80:8080"
