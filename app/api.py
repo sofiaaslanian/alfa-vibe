@@ -5,13 +5,11 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import functools
 import logging
 import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -37,31 +35,15 @@ LATENCY = Histogram("alfa_process_latency_seconds", "Latency", ["route", "mode"]
 RPS = Counter("alfa_process_total", "Total requests", ["route", "mode", "status"])
 TPS = Counter("alfa_tokens_total", "Estimated tokens", ["route"])
 
-# Bounded per-worker executor: reject above the configured in-flight limit
-# instead of building an unbounded queue behind asyncio's small default pool.
+# Sync load clients ≈200; reject excess with 429 (not an SLA error per org Q&A).
 _process_sem: asyncio.Semaphore | None = None
-_process_pool: ThreadPoolExecutor | None = None
-
-
-def _process_limit() -> int:
-    return max(int(os.getenv("PROCESS_CONCURRENCY", "48")), 1)
 
 
 def _process_semaphore() -> asyncio.Semaphore:
     global _process_sem
     if _process_sem is None:
-        _process_sem = asyncio.Semaphore(_process_limit())
+        _process_sem = asyncio.Semaphore(int(os.getenv("PROCESS_CONCURRENCY", "48")))
     return _process_sem
-
-
-def _process_executor() -> ThreadPoolExecutor:
-    global _process_pool
-    if _process_pool is None:
-        _process_pool = ThreadPoolExecutor(
-            max_workers=_process_limit(),
-            thread_name_prefix="alfa-process",
-        )
-    return _process_pool
 
 
 class ProcessRequest(BaseModel):
@@ -199,16 +181,12 @@ async def process(
     status = "200"
     try:
         trace: dict[str, object] = {}
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(
-            _process_executor(),
-            functools.partial(
-                svc.process,
-                body.payload,
-                body.payload_id,
-                system or None,
-                trace=trace,
-            ),
+        result = await asyncio.to_thread(
+            svc.process,
+            body.payload,
+            body.payload_id,
+            system or None,
+            trace=trace,
         )
         mode = str(trace.get("mode", mode))
         log.info(
