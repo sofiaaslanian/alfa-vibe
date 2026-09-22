@@ -57,7 +57,7 @@ jobs:
 
       - name: Start API with Redis
         run: |
-          uvicorn app.main:app --host 127.0.0.1 --port 8080 --workers 4 > /tmp/alfa-api.log 2>&1 &
+          uvicorn app.main:app --host 127.0.0.1 --port 8080 --workers 4 --no-access-log > /tmp/alfa-api.log 2>&1 &
           echo $! > /tmp/alfa-api.pid
           for i in $(seq 1 30); do
             curl -fsS http://127.0.0.1:8080/ready && break
