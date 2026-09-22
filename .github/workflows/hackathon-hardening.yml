@@ -65,6 +65,9 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8080/ready
 
+      - name: Profile individual rule detectors
+        run: python scripts/profile_rules.py
+
       - name: Profile 100k stages in Redis
         run: python scripts/profile_process.py
 
