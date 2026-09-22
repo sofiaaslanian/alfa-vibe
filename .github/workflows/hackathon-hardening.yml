@@ -57,7 +57,7 @@ jobs:
 
       - name: Start API with Redis
         run: |
-          uvicorn app.main:app --host 127.0.0.1 --port 8080 --workers 2 > /tmp/alfa-api.log 2>&1 &
+          uvicorn app.main:app --host 127.0.0.1 --port 8080 --workers 4 > /tmp/alfa-api.log 2>&1 &
           echo $! > /tmp/alfa-api.pid
           for i in $(seq 1 30); do
             curl -fsS http://127.0.0.1:8080/ready && break
@@ -65,8 +65,11 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8080/ready
 
+      - name: Profile 100k stages in Redis
+        run: python scripts/profile_process.py
+
       - name: Redis short pair load
-        run: python scripts/load_smoke.py --url http://127.0.0.1:8080 --n 400 --concurrency 40 --mode pair
+        run: python scripts/load_smoke.py --url http://127.0.0.1:8080 --n 800 --concurrency 100 --mode pair
 
       - name: Redis 100k pair
         run: python scripts/load_smoke.py --url http://127.0.0.1:8080 --profile 100k --mode pair --n 4 --concurrency 2
