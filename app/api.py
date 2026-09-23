@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
     app.state.store = store
     app.state.process = ProcessService(cfg, store)
     app.state.llm = AlfaGenClient()
-    if os.getenv("NER_ENABLED", "0") == "1":
+    if os.getenv("CONTEXT_ML_ENABLED", os.getenv("NER_ENABLED", "0")) == "1":
         from app.pii.detect import get_ner
 
         ner = get_ner()
@@ -163,6 +163,8 @@ async def process(
     cfg: Config = request.app.state.config
     svc: ProcessService = request.app.state.process
     system = _check_system(cfg, _system(request, x_system), required=False)
+    # /process is the evaluator profile even when no X-System header is sent.
+    effective_system = system or "autotest"
 
     sem = _process_semaphore()
     try:
@@ -181,7 +183,7 @@ async def process(
     try:
         live = svc.store.get_live("autotest", body.payload_id)
         mode = "mask" if live is None else "retry_or_demask"
-        result = svc.process(body.payload, body.payload_id, system or None)
+        result = svc.process(body.payload, body.payload_id, effective_system)
         return ProcessResponse(result=result)
     except ProcessError as exc:
         status = str(exc.status)
