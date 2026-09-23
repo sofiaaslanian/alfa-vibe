@@ -99,6 +99,11 @@ class ProcessService:
             return False
         return system == "demo"
 
+    def _ner_for_system(self, system: Optional[str], need_person: bool) -> bool:
+        """Backward-compatible alias for the pre-v2 routing API."""
+        return self._context_ml_for_system(system, need_person)
+
+
     def detect(self, text: str, system: Optional[str] = None) -> list[Finding]:
         allowed_set = self._allowed_types(system)
         need_context_ml = allowed_set is None or bool(allowed_set & CONTEXT_TYPES)
