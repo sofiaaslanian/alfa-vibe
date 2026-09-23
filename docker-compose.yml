@@ -1,6 +1,6 @@
 services:
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.11-alpine
     command:
       - redis-server
       - --appendonly
@@ -85,7 +85,7 @@ services:
       start_period: 20s
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11.4-alpine
     environment:
       DOMAIN: "${DOMAIN:?Set DOMAIN in .env}"
       ACME_EMAIL: "${ACME_EMAIL:?Set ACME_EMAIL in .env}"
