@@ -81,6 +81,33 @@ def _ctx(text: str, start: int, end: int, size: int = WINDOW) -> str:
     return text[max(0, start - size) : min(len(text), end + size)]
 
 
+def _last_match_end(regex: re.Pattern[str], value: str) -> int:
+    """End of the closest role cue in a left-context window, or -1."""
+    return max((match.end() for match in regex.finditer(value)), default=-1)
+
+
+def _left_role_decision(
+    text: str,
+    start: int,
+    *,
+    personal_re: re.Pattern[str],
+    public_re: re.Pattern[str],
+    size: int = WINDOW,
+) -> bool | None:
+    """Nearest explicit role before a value wins.
+
+    True = personal, False = public/non-personal, None = no explicit role.
+    This prevents cues for a later/earlier entity in the same message from
+    leaking into the current candidate.
+    """
+    left = _left(text, start, size)
+    personal_end = _last_match_end(personal_re, left)
+    public_end = _last_match_end(public_re, left)
+    if personal_end < 0 and public_end < 0:
+        return None
+    return personal_end >= public_end
+
+
 def has_kyc_or_self_claim(text: str, start: int, end: int) -> bool:
     left = _left(text, start)
     right = _right(text, end, 48)
@@ -147,30 +174,29 @@ ADDRESS_STRONG_PERSONAL_RE = re.compile(
 def is_personal_address_mention(text: str, start: int, end: int) -> bool:
     """Personal home/delivery address vs public/service place.
 
-    Public/service framing wins over generic location syntax such as
-    «по адресу». Only an explicit owner/delivery cue can override it.
+    Explicit roles are resolved locally: the nearest role cue before this
+    address wins. Generic syntax («по адресу») never overrides a public role.
     """
     from app.pii.claims import ADDRESS_PERSONAL_RE, ADDRESS_PUBLIC_RE
 
     left = _left(text, start)
-    ctx = _ctx(text, start, end)
     value = text[start:end]
-    strong_personal = bool(
-        ADDRESS_STRONG_PERSONAL_RE.search(left)
-        or ADDRESS_STRONG_PERSONAL_RE.search(ctx)
+    role = _left_role_decision(
+        text,
+        start,
+        personal_re=ADDRESS_STRONG_PERSONAL_RE,
+        public_re=ADDRESS_PUBLIC_RE,
     )
-    personal = bool(ADDRESS_PERSONAL_RE.search(left) or ADDRESS_PERSONAL_RE.search(ctx))
-    public = bool(ADDRESS_PUBLIC_RE.search(left) or ADDRESS_PUBLIC_RE.search(ctx))
+    if role is not None:
+        return role
 
-    if public and not strong_personal:
-        return False
-    if strong_personal:
-        return True
-    if personal and not public:
+    # Generic personal/location wording is useful only when no explicit
+    # public/service role has been established for this candidate.
+    if ADDRESS_PERSONAL_RE.search(left):
         return True
     if re.search(r"(?i)адрес", left):
-        return not public
-    # Structured street address without public cue — keep (format-context)
+        return not bool(ADDRESS_PUBLIC_RE.search(left))
+    # Structured street address without public cue — keep (format-context).
     return bool(
         re.search(r"(?i)(?:ул\.|улиц|пр\.|проспект|проезд|пер\.|ш\.|дом|\bд\.)", value)
     )
@@ -251,21 +277,18 @@ PAYMENT_CARD_PERSONAL_RE = re.compile(
 
 def is_personal_phone_mention(text: str, start: int, end: int) -> bool:
     """Keep personal phones; drop public/service contact roles."""
-    from app.pii.public_contacts import (
-        has_service_phone_context,
-        is_public_service_phone,
-    )
+    from app.pii.public_contacts import is_public_service_phone
 
     value = text[start:end]
-    ctx = _ctx(text, start, end, 120)
-    personal = bool(PHONE_PERSONAL_RE.search(ctx))
     if is_public_service_phone(value):
         return False
-    if PUBLIC_CONTACT_ROLE_RE.search(ctx) and not personal:
-        return False
-    if has_service_phone_context(text, start, end) and not personal:
-        return False
-    return True
+    role = _left_role_decision(
+        text,
+        start,
+        personal_re=PHONE_PERSONAL_RE,
+        public_re=PUBLIC_CONTACT_ROLE_RE,
+    )
+    return role is not False
 
 
 def should_skip_phone(text: str, start: int, end: int) -> bool:
@@ -273,14 +296,18 @@ def should_skip_phone(text: str, start: int, end: int) -> bool:
 
 
 def is_personal_email_mention(text: str, start: int, end: int) -> bool:
-    """A syntactically valid email is PII unless context marks a template/service role."""
-    ctx = _ctx(text, start, end, 120)
-    personal = bool(EMAIL_PERSONAL_RE.search(ctx))
-    if NON_PERSONAL_TEMPLATE_RE.search(ctx) and not personal:
-        return False
-    if PUBLIC_CONTACT_ROLE_RE.search(ctx) and not personal:
-        return False
-    return True
+    """A syntactically valid email is PII unless its local role is non-personal."""
+    non_personal = re.compile(
+        rf"(?:{NON_PERSONAL_TEMPLATE_RE.pattern}|{PUBLIC_CONTACT_ROLE_RE.pattern})",
+        re.IGNORECASE,
+    )
+    role = _left_role_decision(
+        text,
+        start,
+        personal_re=EMAIL_PERSONAL_RE,
+        public_re=non_personal,
+    )
+    return role is not False
 
 
 def should_skip_email(text: str, start: int, end: int) -> bool:
@@ -288,12 +315,14 @@ def should_skip_email(text: str, start: int, end: int) -> bool:
 
 
 def is_personal_payment_card_mention(text: str, start: int, end: int) -> bool:
-    """Luhn/shape proves a PAN candidate, while role decides whether it is a card."""
-    ctx = _ctx(text, start, end, 120)
-    personal = bool(PAYMENT_CARD_PERSONAL_RE.search(ctx))
-    if TECHNICAL_IDENTIFIER_ROLE_RE.search(ctx) and not personal:
-        return False
-    return True
+    """Luhn/shape proves a PAN candidate, while the nearest role decides its meaning."""
+    role = _left_role_decision(
+        text,
+        start,
+        personal_re=PAYMENT_CARD_PERSONAL_RE,
+        public_re=TECHNICAL_IDENTIFIER_ROLE_RE,
+    )
+    return role is not False
 
 
 def should_skip_payment_card(text: str, start: int, end: int) -> bool:
