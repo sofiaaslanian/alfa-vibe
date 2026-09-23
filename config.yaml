@@ -1,12 +1,12 @@
 systems:
-  # Evaluator /process profile. Context ML can be enabled here once its
-  # deployment/runtime profile is validated against the RPS target.
+  # Evaluator /process profile follows the target architecture:
+  # context-defined PII goes through the ML flow.
   autotest:
     enabled: true
     pd_types: []
     allow_demask: true
     mask_style: dev_redact
-    use_context_ml: false
+    use_context_ml: true
 
   demo:
     enabled: true
