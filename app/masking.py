@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import secrets
 from app.pii.detect import Finding, maskable
 
@@ -44,8 +45,74 @@ def redact_chars(value: str) -> str:
     return "".join(out)
 
 
+def _expand_document_label_spans(text: str, findings: list[Finding]) -> list[Finding]:
+    """For passport/VU series+number pairs, include explicit service labels in the redacted span.
+
+    Detection stays unchanged. We only widen an already-confirmed document pair such as
+    «серия 45 11, номер 123456» so /process masks the whole logical fragment.
+    """
+    items = sorted(findings, key=lambda f: (f.start, f.end))
+    used: set[int] = set()
+    out: list[Finding] = []
+
+    for i, first in enumerate(items):
+        if i in used:
+            continue
+        if first.type not in {"PASSPORT", "DRIVER_LICENSE"} or getattr(first, "part", "") != "series":
+            out.append(first)
+            continue
+
+        pair_idx = None
+        for j in range(i + 1, len(items)):
+            second = items[j]
+            if second.start - first.end > 32:
+                break
+            if (
+                second.type == first.type
+                and getattr(second, "part", "") == "number"
+                and re.fullmatch(r"\s*,?\s*(?:номер|№)\s*", text[first.end:second.start], re.IGNORECASE)
+            ):
+                pair_idx = j
+                break
+
+        if pair_idx is None:
+            out.append(first)
+            continue
+
+        second = items[pair_idx]
+        start = first.start
+        left_start = max(0, first.start - 16)
+        left = text[left_start:first.start]
+        m = re.search(r"(?i)серия\s*$", left)
+        if m:
+            start = left_start + m.start()
+
+        out.append(
+            Finding(
+                first.type,
+                start,
+                second.end,
+                min(first.score, second.score),
+                "document_full_span_v1",
+                part="full",
+            )
+        )
+        used.add(pair_idx)
+
+    for i, item in enumerate(items):
+        if i in used:
+            continue
+        if item not in out and not (
+            item.type in {"PASSPORT", "DRIVER_LICENSE"}
+            and getattr(item, "part", "") == "series"
+        ):
+            out.append(item)
+
+    return sorted(out, key=lambda f: (f.start, f.end))
+
+
 def apply_dev_redact(text: str, findings: list[Finding]) -> str:
-    findings = maskable(findings)
+    findings = _expand_document_label_spans(text, maskable(findings))
     if not findings:
         return text
     result = text
