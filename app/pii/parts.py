@@ -39,7 +39,7 @@ _ADDR_STREET_PREFIX_RE = re.compile(
 )
 _ADDR_STREET_SUFFIX_RE = re.compile(
     rf"(?<![А-Яа-яЁёA-Za-z0-9])"
-    rf"(?P<value>{_ADDR_STREET_WORDS})\s+(?i:{_ADDR_STREET_LABEL})"
+    rf"(?P<value>{_ADDR_STREET_WORDS}\s+(?i:{_ADDR_STREET_LABEL}))"
 )
 _ADDR_HOUSE_RE = re.compile(r"(?i)(?:д\.|дом)\s*(?P<value>\d+[А-ЯA-Z]?)")
 _ADDR_FLAT_RE = re.compile(r"(?i)(?:кв\.|квартира)\s*(?P<value>\d+)")
