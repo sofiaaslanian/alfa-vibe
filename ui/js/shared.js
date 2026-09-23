@@ -25,23 +25,25 @@ export function esc(s) {
     .replace(/>/g, "&gt;");
 }
 
+const PROM_METRICS = [
+  ["alfa_process_total{", "process_total"],
+  ["alfa_process_latency_seconds_sum", "latency_sum"],
+  ["alfa_process_latency_seconds_count", "latency_count"],
+  ["alfa_tokens_total{", "tokens"],
+];
+
+function prometheusMetric(line) {
+  return PROM_METRICS.find(([prefix]) => line.startsWith(prefix));
+}
+
 export function parsePrometheus(text) {
   const out = { process_total: 0, latency_sum: 0, latency_count: 0, tokens: 0 };
   for (const line of text.split("\n")) {
     if (line.startsWith("#") || !line.trim()) continue;
-    if (line.startsWith("alfa_process_total{")) {
-      const v = Number(line.split(" ").pop());
-      if (!Number.isNaN(v)) out.process_total += v;
-    } else if (line.startsWith("alfa_process_latency_seconds_sum")) {
-      const v = Number(line.split(" ").pop());
-      if (!Number.isNaN(v)) out.latency_sum += v;
-    } else if (line.startsWith("alfa_process_latency_seconds_count")) {
-      const v = Number(line.split(" ").pop());
-      if (!Number.isNaN(v)) out.latency_count += v;
-    } else if (line.startsWith("alfa_tokens_total{")) {
-      const v = Number(line.split(" ").pop());
-      if (!Number.isNaN(v)) out.tokens += v;
-    }
+    const metric = prometheusMetric(line);
+    if (!metric) continue;
+    const value = Number(line.split(" ").pop());
+    if (!Number.isNaN(value)) out[metric[1]] += value;
   }
   out.avg_latency_ms =
     out.latency_count > 0 ? (out.latency_sum / out.latency_count) * 1000 : null;
