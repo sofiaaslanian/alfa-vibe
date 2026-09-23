@@ -1,0 +1,38 @@
+name: package-supply-chain-temp
+
+on:
+  push:
+    branches: [experiment/iac-ci-sonar-cleanup-v2]
+
+jobs:
+  validate-package:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Validate compose
+        run: |
+          cp .env.example .env
+          sed -i 's/^DOMAIN=.*/DOMAIN=example.com/' .env
+          sed -i 's/^ACME_EMAIL=.*/ACME_EMAIL=ci@example.com/' .env
+          docker compose config --quiet
+      - name: Build proxy image
+        run: docker build -t alfa-vibe-supply-chain-test .
+      - name: Prepare snapshot
+        run: |
+          mkdir -p /tmp/alfa-vibe-supply-chain-sonar
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.env' \
+            --exclude='.github/workflows/package-supply-chain-temp.yml' \
+            ./ /tmp/alfa-vibe-supply-chain-sonar/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: alfa-vibe-supply-chain-sonar
+          path: /tmp/alfa-vibe-supply-chain-sonar/
+          include-hidden-files: true
+          retention-days: 1
