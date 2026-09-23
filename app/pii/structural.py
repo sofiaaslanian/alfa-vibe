@@ -11,6 +11,51 @@ from app.pii.catalog import BY_TYPE, StructureKind
 from app.pii.detect import Finding
 
 
+def _split_series_number(
+    text: str,
+    finding: Finding,
+) -> list[Finding]:
+    """Split a confirmed 10-digit document number into 4-digit series + 6-digit number.
+
+    Non-digits between the first four digits stay outside the semantic value
+    except separators inside the series itself (e.g. "45 11").
+    """
+    positions = [
+        i for i in range(finding.start, finding.end)
+        if text[i].isdigit()
+    ]
+    if len(positions) != 10:
+        return [finding]
+
+    series_start = positions[0]
+    series_end = positions[3] + 1
+    number_start = positions[4]
+    number_end = positions[9] + 1
+
+    return [
+        Finding(
+            finding.type,
+            series_start,
+            series_end,
+            finding.score,
+            finding.detector,
+            getattr(finding, "decision", "mask"),
+            getattr(finding, "reason", "") or "",
+            part="series",
+        ),
+        Finding(
+            finding.type,
+            number_start,
+            number_end,
+            finding.score,
+            finding.detector,
+            getattr(finding, "decision", "mask"),
+            getattr(finding, "reason", "") or "",
+            part="number",
+        ),
+    ]
+
+
 def normalize_structures(text: str, findings: list[Finding]) -> list[Finding]:
     from app.pii.parts import split_address_span, split_person_span, split_cardholder_span
 
@@ -68,9 +113,10 @@ def normalize_structures(text: str, findings: list[Finding]) -> list[Finding]:
             )
             continue
 
-        # PASSPORT / DRIVER_LICENSE are still emitted with explicit parts by
-        # legacy candidate rules. Until those detectors are migrated, an
-        # unsplit candidate is kept intact rather than guessed here.
+        if finding.type in {"PASSPORT", "DRIVER_LICENSE"}:
+            out.extend(_split_series_number(text, finding))
+            continue
+
         out.append(finding)
 
     return out
