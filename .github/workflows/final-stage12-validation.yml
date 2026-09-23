@@ -1,0 +1,41 @@
+name: Final stage 1-2 frozen validation
+
+on:
+  push:
+    branches: [fix/stage1-stage2-architecture]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PYTHONPATH: "."
+      STORAGE_BACKEND: memory
+      CONTEXT_ML_ENABLED: "1"
+      NER_ENABLED: "1"
+      NER_LOCAL: "1"
+      CONTEXT_ML_FAIL_CLOSED: "1"
+      NER_FAIL_CLOSED: "1"
+      HF_HUB_OFFLINE: "0"
+      TRANSFORMERS_OFFLINE: "0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/stage1-stage2-architecture
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11.16"
+          cache: pip
+          cache-dependency-path: requirements-ner.lock
+      - run: python -m pip install --require-hashes -r requirements-ner.lock
+      - name: Full pytest
+        run: pytest -q
+      - name: Frozen stage 1
+        run: python scripts/eval_stage1_identification.py
+      - name: Frozen stage 2
+        run: python scripts/eval_stage2_masking.py
