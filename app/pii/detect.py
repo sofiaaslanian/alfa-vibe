@@ -177,31 +177,53 @@ def _overlaps(a: Finding, b: Finding) -> bool:
 
 
 def _overlap_union(candidate: Finding, hits: list[Finding]) -> Finding:
+    """Merge overlaps without destroying semantic type unnecessarily.
+
+    Multiple detectors often emit partially overlapping candidates for the
+    same entity (especially composite ADDRESS/PERSON values). Keeping that
+    type lets the structural layer split the accepted object into semantic
+    mask spans. REDACTED_SPAN is reserved for true cross-type conflicts.
+    """
     union_start = min([candidate.start] + [hit.start for hit in hits])
     union_end = max([candidate.end] + [hit.end for hit in hits])
     union_score = min(candidate.score, min(hit.score for hit in hits))
+    types = {candidate.type, *(hit.type for hit in hits)}
+    if len(types) == 1:
+        return Finding(
+            candidate.type,
+            union_start,
+            union_end,
+            union_score,
+            "same_type_overlap_union",
+        )
     return Finding("REDACTED_SPAN", union_start, union_end, union_score, "overlap_union")
 
 
 def _accept_candidate(accepted: list[Finding], candidate: Finding) -> list[Finding]:
+    """Apply semantic precedence before span size.
+
+    Accepted findings are processed in descending semantic priority and span
+    length. A later generic candidate must not evict a more specific role
+    merely because its span is wider. Same-type overlaps merge while keeping
+    their type; true cross-type partial conflicts are conservatively unioned.
+    """
     hits = [finding for finding in accepted if _overlaps(candidate, finding)]
     if not hits:
         return [*accepted, candidate]
+
+    if all(hit.type == candidate.type for hit in hits):
+        kept = [finding for finding in accepted if finding not in hits]
+        return [*kept, _overlap_union(candidate, hits)]
+
+    candidate_priority = PRIORITY.get(candidate.type, 0)
+    if any(PRIORITY.get(hit.type, 0) > candidate_priority for hit in hits):
+        return accepted
+
     if any(hit.start <= candidate.start and candidate.end <= hit.end for hit in hits):
         return accepted
 
-    contained = [
-        hit
-        for hit in hits
-        if candidate.start <= hit.start and hit.end <= candidate.end
-    ]
-    if contained and len(contained) == len(hits):
-        kept = [finding for finding in accepted if finding not in contained]
-        return [*kept, candidate]
-
     kept = [finding for finding in accepted if finding not in hits]
     return [*kept, _overlap_union(candidate, hits)]
-
 
 def _append_uncovered_allows(
     accepted: list[Finding],
@@ -407,5 +429,12 @@ def detect_pii(
         context_ml_findings=context_ml_findings,
     )
     findings = sanitize_format_findings(text, findings)
-    findings = normalize_structures(text, findings)
-    return resolve_overlaps(filter_findings(text, findings))
+
+    # Candidate eligibility and overlap resolution operate on whole entities.
+    # Structural decomposition is intentionally last: once a composite object
+    # is accepted (ADDRESS / PERSON / PASSPORT / ...), split only its semantic
+    # values into mask spans. Otherwise a later overlap union can widen a
+    # correctly split value back over service labels such as "ул.", "д.", "кв.".
+    findings = filter_findings(text, findings)
+    findings = resolve_overlaps(findings)
+    return normalize_structures(text, findings)

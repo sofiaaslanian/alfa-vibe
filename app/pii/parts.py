@@ -17,23 +17,60 @@ _FIO_TOKEN_RE = re.compile(r"[А-ЯЁA-Z][А-Яа-яЁёA-Za-z\-]*")
 _LAT_TOKEN_RE = re.compile(r"[A-Z][A-Za-z\-]*")
 
 # Address component extractors (inside an already-validated ADDRESS span).
+# These regexes locate complete components; semantic span normalization below
+# removes role labels such as "ул.", "д.", "кв." from the protected value.
 _ADDR_INDEX_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
 _ADDR_CITY_RE = re.compile(
-    r"(?i)(?:(?:г\.|город)\s*)?([А-ЯЁ][А-Яа-яЁё\-]+)"
+    r"(?:(?i:г\.|город)\s*)?([А-ЯЁ][А-Яа-яЁё\-]+)"
+)
+_ADDR_STREET_TYPE = (
+    r"(?:ул\.|улиц(?:а|е|у)|пр\.|пр\-т|проспект(?:е|у)?|просп\.|"
+    r"пер\.|переулок(?:е)?|ш\.|шоссе|б\-р|бульвар(?:е)?|"
+    r"наб\.|набережн(?:ая|ой)|пл\.|площад(?:ь|и))"
 )
 _ADDR_STREET_RE = re.compile(
-    r"(?i)("
-    r"(?:ул\.|улица|пр\.|пр\-т|проспект|пер\.|переулок|ш\.|шоссе|б\-р|бульвар|наб\.|пл\.|площадь)"
-    r"\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
-    r"|"
-    r"[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+"
-    r"(?:ул\.|улица|пр\.|пр\-т|проспект|пер\.|переулок|ш\.|шоссе|б\-р|бульвар|наб\.|пл\.|площадь)"
-    r")"
+    rf"("
+    rf"(?i:{_ADDR_STREET_TYPE})\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
+    rf"|"
+    rf"[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+(?i:{_ADDR_STREET_TYPE})"
+    rf")"
 )
-# Include role prefixes in house/flat spans so redact matches full-address baselines.
 _ADDR_HOUSE_RE = re.compile(r"(?i)((?:д\.|дом)\s*\d+[А-ЯA-Z]?)")
+# Spoken / natural address: "на улице Ленина 5", "Невский проспект 20".
+# The address role has already been validated upstream; here we only extract
+# the semantic house value, not the street label.
+_ADDR_BARE_HOUSE_RE = re.compile(
+    rf"(?:"
+    rf"(?i:{_ADDR_STREET_TYPE})\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
+    rf"|[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+(?i:{_ADDR_STREET_TYPE})"
+    rf")\s+(\d+[А-ЯA-Z]?)"
+)
 _ADDR_FLAT_RE = re.compile(r"(?i)((?:кв\.|квартира)\s*\d+)")
 _ADDR_CORP_RE = re.compile(r"(?i)((?:корп\.|корпус|стр\.|строен\w*)\s*\d+[А-ЯA-Z]?)")
+
+_ADDRESS_PREFIX_BY_PART = {
+    "city": re.compile(r"(?i)^(?:г\.|город)\s*"),
+    "street": re.compile(rf"(?i)^{_ADDR_STREET_TYPE}\s+"),
+    "house": re.compile(r"(?i)^(?:д\.|дом)\s*"),
+    "flat": re.compile(r"(?i)^(?:кв\.|квартира)\s*"),
+    "building": re.compile(r"(?i)^(?:корп\.|корпус|стр\.|строен\w*)\s*"),
+}
+_ADDRESS_SERVICE_TOKENS = frozenset({
+    "на",
+    "г", "город",
+    "ул", "улица", "улице", "улицу",
+    "пр", "пр-т", "просп", "проспект", "проспекте", "проспекту",
+    "пер", "переулок", "переулке",
+    "ш", "шоссе",
+    "б-р", "бульвар", "бульваре",
+    "наб", "набережная", "набережной",
+    "пл", "площадь", "площади",
+    "д", "дом",
+    "кв", "квартира",
+    "корп", "корпус",
+    "стр", "строение",
+})
+_ADDRESS_RESIDUAL_TOKEN_RE = re.compile(r"(?iu)[а-яёa-z]+(?:-[а-яёa-z]+)?|\d+")
 
 
 def classify_fio_parts(tokens: list[str]) -> list[str]:
@@ -124,6 +161,45 @@ def split_cardholder_span(
     ]
 
 
+def normalize_address_part(
+    text: str,
+    finding: Finding,
+) -> Finding:
+    """Canonicalize one already-classified ADDRESS component.
+
+    Detector-specific spans may include a role label (e.g. "ул. Баумана",
+    "д. 7"). Structural normalization owns the final mask boundary and must
+    be idempotent for parts that are already clean.
+    """
+    part = getattr(finding, "part", "") or ""
+    prefix_re = _ADDRESS_PREFIX_BY_PART.get(part)
+    if prefix_re is None:
+        return finding
+
+    raw = text[finding.start:finding.end]
+    prefix = prefix_re.match(raw)
+    if not prefix:
+        return finding
+
+    start = finding.start + prefix.end()
+    end = finding.end
+    while start < end and text[start].isspace():
+        start += 1
+    if start >= end:
+        return finding
+
+    return Finding(
+        "ADDRESS",
+        start,
+        end,
+        finding.score,
+        finding.detector,
+        getattr(finding, "decision", "mask"),
+        getattr(finding, "reason", "") or "",
+        part=part,
+    )
+
+
 def _append_address_part(
     found: list[Finding],
     covered: list[tuple[int, int]],
@@ -180,18 +256,43 @@ def _collect_address_parts(
     )
     for regex, part in patterns:
         for match in regex.finditer(chunk):
+            rel_start, rel_end = match.start(1), match.end(1)
+            prefix_re = _ADDRESS_PREFIX_BY_PART.get(part)
+            if prefix_re is not None:
+                prefix = prefix_re.match(chunk[rel_start:rel_end])
+                if prefix:
+                    rel_start += prefix.end()
             _append_address_part(
                 found,
                 covered,
                 start=start,
-                rel_start=match.start(1),
-                rel_end=match.end(1),
+                rel_start=rel_start,
+                rel_end=rel_end,
                 part=part,
                 score=score,
                 detector=detector,
                 decision=decision,
                 reason=reason,
             )
+
+    # If the house is written without "д./дом", extract it only after
+    # a recognized street component. This handles natural speech without
+    # turning arbitrary trailing numbers into address parts.
+    if not any(f.part == "house" for f in found):
+        for match in _ADDR_BARE_HOUSE_RE.finditer(chunk):
+            _append_address_part(
+                found,
+                covered,
+                start=start,
+                rel_start=match.start(1),
+                rel_end=match.end(1),
+                part="house",
+                score=score,
+                detector=detector,
+                decision=decision,
+                reason=reason,
+            )
+            break
 
     for match in _ADDR_CITY_RE.finditer(chunk):
         before = len(found)
@@ -218,13 +319,27 @@ def _address_parts_cover_alnum(
     end: int,
     findings: list[Finding],
 ) -> bool:
+    """Accept split only when every residual token is an address role label.
+
+    Semantic values are already covered by child findings. Labels such as
+    "ул.", "д.", "кв." and "на улице" may remain visible. Any other residual
+    word or number keeps the conservative whole-span fallback.
+    """
     covered = {
         index
         for finding in findings
         for index in range(finding.start, finding.end)
-        if text[index].isalnum()
     }
-    return all(not text[index].isalnum() or index in covered for index in range(start, end))
+    residual = "".join(
+        " " if index in covered else text[index]
+        for index in range(start, end)
+    )
+    allowed = {token.replace("ё", "е") for token in _ADDRESS_SERVICE_TOKENS}
+    tokens = [
+        match.group(0).lower().replace("ё", "е")
+        for match in _ADDRESS_RESIDUAL_TOKEN_RE.finditer(residual)
+    ]
+    return all(token in allowed for token in tokens)
 
 
 def split_address_span(

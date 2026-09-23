@@ -156,3 +156,30 @@ def test_current_model_coverage_has_explicit_issuer_fallback():
     out = ContextFlow.detect(text, ml_findings=[])
     assert any(f.type == "PASSPORT_ISSUER" for f in out.findings)
     assert not any(f.type == "PERSON" for f in out.findings)
+
+
+def test_ml_location_role_does_not_leak_across_next_field():
+    text = (
+        "Клиентка Мария Соколова родилась 7 января 1992 года, "
+        "адрес проживания: Казань, ул. Баумана, д. 7."
+    )
+    start = text.index("Казань")
+    raw = [{"entity_group": "CITY", "start": start, "end": start + len("Казань"), "score": 0.97}]
+    out = raw_entities_to_context_findings(text, raw)
+
+    assert any(f.type == "ADDRESS" for f in out)
+    assert not any(f.type == "PLACE_OF_BIRTH" for f in out)
+
+
+def test_address_normalization_is_detector_independent():
+    text = "ул. Баумана"
+    finding = Finding(
+        "ADDRESS",
+        0,
+        len(text),
+        0.95,
+        "context_ml_v1",
+        part="street",
+    )
+    parts = normalize_structures(text, [finding])
+    assert [(p.part, text[p.start:p.end]) for p in parts] == [("street", "Баумана")]
