@@ -16,6 +16,9 @@ SNILS = "112-233-445 95"
 CARD = "4111 1111 1111 1111"
 CARD_NBSP = "4111\u00a01111\u00a01111\u00a01111"
 PHONE = "+7 (999) 123-45-67"
+PHONE_COMPACT = "+79991234567"
+IVAN_PETROV = "Иван Петров"
+IVAN_EMAIL = "ivan@example.ru"
 
 CASES = [
     # ── EMAIL ──────────────────────────────────────────────────────────────
@@ -41,7 +44,7 @@ CASES = [
     },
     {
         "id": "h04_email_quoted_display_name",
-        "text": 'Контакт: "Иван Петров" <client@alfa-demo.ru>',
+        "text": 'Контакт: IVAN_PETROV <client@alfa-demo.ru>',
         "enabled_types": ["EMAIL"],
         "expected": [{"type": "EMAIL", "value": "client@alfa-demo.ru", "match": "exact"}],
     },
@@ -70,7 +73,7 @@ CASES = [
         "id": "h08_phone_tel_uri",
         "text": "Звоните tel:+79991234567 сейчас.",
         "enabled_types": ["PHONE"],
-        "expected": [{"type": "PHONE", "value": "+79991234567", "match": "exact"}],
+        "expected": [{"type": "PHONE", "value": PHONE_COMPACT, "match": "exact"}],
     },
     {
         "id": "h09_phone_extension_not_swallowed",
@@ -405,7 +408,7 @@ CASES = [
         "id": "h55_manager_vs_client",
         "text": "Менеджер Анна Смирнова оформила заявку. Клиент Иван Петров подтвердил данные.",
         "enabled_types": ["PERSON_NAME"],
-        "expected": [{"type": "PERSON_NAME", "value": "Иван Петров", "match": "exact"}],
+        "expected": [{"type": "PERSON_NAME", "value": IVAN_PETROV, "match": "exact"}],
         "must_not_cover_values": ["Анна Смирнова"],
     },
     {
@@ -459,13 +462,13 @@ CASES = [
     {
         "id": "h63_json_customer_vs_merchant",
         "text": (
-            '{"customer":{"name":"Иван Петров","email":"ivan@example.ru"},'
-            '"merchant":{"name":"Иван Петров","email":"shop@example.ru"}}'
+            '{"customer":{"name":IVAN_PETROV,"email":IVAN_EMAIL},'
+            '"merchant":{"name":IVAN_PETROV,"email":"shop@example.ru"}}'
         ),
         "enabled_types": ["PERSON_NAME", "EMAIL"],
         "expected": [
-            {"type": "PERSON_NAME", "value": "Иван Петров", "match": "exact", "occurrence": 1},
-            {"type": "EMAIL", "value": "ivan@example.ru", "match": "exact"},
+            {"type": "PERSON_NAME", "value": IVAN_PETROV, "match": "exact", "occurrence": 1},
+            {"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact"},
         ],
         "must_not_cover_values": ["shop@example.ru"],
     },
@@ -501,7 +504,7 @@ CASES = [
         "text": "fio: Петров Иван\nemail: ivan@example.ru\nbirth_date: 01.02.1990",
         "enabled_types": ["PERSON_NAME", "EMAIL", "BIRTH_DATE"],
         "expected": [
-            {"type": "EMAIL", "value": "ivan@example.ru", "match": "exact"},
+            {"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact"},
             {"type": "BIRTH_DATE", "value": "01.02.1990", "match": "exact"},
         ],
     },
@@ -510,7 +513,7 @@ CASES = [
         "text": "<client><phone>+79991234567</phone><inn>500100732259</inn></client>",
         "enabled_types": ["PHONE", "INN"],
         "expected": [
-            {"type": "PHONE", "value": "+79991234567", "match": "exact"},
+            {"type": "PHONE", "value": PHONE_COMPACT, "match": "exact"},
             {"type": "INN", "value": "500100732259", "match": "exact"},
         ],
     },
@@ -519,8 +522,8 @@ CASES = [
         "text": "id,email,phone\n1,ivan@example.ru,+79991234567",
         "enabled_types": ["EMAIL", "PHONE"],
         "expected": [
-            {"type": "EMAIL", "value": "ivan@example.ru", "match": "exact"},
-            {"type": "PHONE", "value": "+79991234567", "match": "exact"},
+            {"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact"},
+            {"type": "PHONE", "value": PHONE_COMPACT, "match": "exact"},
         ],
     },
     {
@@ -528,7 +531,7 @@ CASES = [
         "text": "Email: ivan@example.ru&nbsp;и телефон +7 999 111-22-33",
         "enabled_types": ["EMAIL", "PHONE"],
         "expected": [
-            {"type": "EMAIL", "value": "ivan@example.ru", "match": "exact"},
+            {"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact"},
             {"type": "PHONE", "value": "+7 999 111-22-33", "match": "exact"},
         ],
     },
@@ -575,7 +578,7 @@ CASES = [
             "Реальная почта клиента: ivan@example.ru."
         ),
         "enabled_types": ["EMAIL"],
-        "expected": [{"type": "EMAIL", "value": "ivan@example.ru", "match": "exact"}],
+        "expected": [{"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact"}],
         "must_not_cover_values": ["test@example.com"],
     },
     {
@@ -597,13 +600,13 @@ CASES = [
         "id": "h79_double_spaces_and_tabs",
         "text": "Email:\t\tivan@example.ru",
         "enabled_types": ["EMAIL"],
-        "expected": [{"type": "EMAIL", "value": "ivan@example.ru", "match": "exact"}],
+        "expected": [{"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact"}],
     },
     {
         "id": "h80_rtl_mark_noise",
         "text": "Почта:\u200fivan@example.ru\u200f",
         "enabled_types": ["EMAIL"],
-        "expected": [{"type": "EMAIL", "value": "ivan@example.ru", "match": "exact"}],
+        "expected": [{"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact"}],
     },
     # ── MIXED / COUNTS ─────────────────────────────────────────────────────
     {
@@ -611,8 +614,8 @@ CASES = [
         "text": "Основная ivan@example.ru, резервная тоже ivan@example.ru.",
         "enabled_types": ["EMAIL"],
         "expected": [
-            {"type": "EMAIL", "value": "ivan@example.ru", "match": "exact", "occurrence": 1},
-            {"type": "EMAIL", "value": "ivan@example.ru", "match": "exact", "occurrence": 2},
+            {"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact", "occurrence": 1},
+            {"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact", "occurrence": 2},
         ],
     },
     {
@@ -735,8 +738,8 @@ CASES = [
         "text": "Клиент — «Иван Петров» — email: ivan@example.ru",
         "enabled_types": ["PERSON_NAME", "EMAIL"],
         "expected": [
-            {"type": "PERSON_NAME", "value": "Иван Петров", "match": "exact"},
-            {"type": "EMAIL", "value": "ivan@example.ru", "match": "exact"},
+            {"type": "PERSON_NAME", "value": IVAN_PETROV, "match": "exact"},
+            {"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact"},
         ],
     },
     {
@@ -792,13 +795,13 @@ CASES = [
             "EMAIL",
         ],
         "expected": [
-            {"type": "PERSON_NAME", "value": "Иван Петров", "match": "exact"},
+            {"type": "PERSON_NAME", "value": IVAN_PETROV, "match": "exact"},
             {"type": "BIRTH_DATE", "value": "01.02.1990", "match": "exact"},
             {"type": "INN", "value": INN, "match": "exact"},
             {"type": "PASSPORT_NUMBER", "value": "45 11", "match": "exact"},
             {"type": "PASSPORT_NUMBER", "value": "123456", "match": "exact"},
             {"type": "PHONE", "value": PHONE, "match": "exact"},
-            {"type": "EMAIL", "value": "ivan@example.ru", "match": "exact"},
+            {"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact"},
         ],
     },
     {
