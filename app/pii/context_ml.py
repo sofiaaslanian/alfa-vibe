@@ -45,7 +45,6 @@ ML_COVERED_CONTEXT_TYPES = frozenset({
     "CITIZENSHIP",
     "ADDRESS",
     "CARDHOLDER_NAME",
-    "PASSPORT_ISSUER",
 })
 
 _BIRTH_ROLE_RE = re.compile(
