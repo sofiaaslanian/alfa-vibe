@@ -1,4 +1,8 @@
-"""PII detection: findings, rules+NER pipeline, eligibility, resolve, apply masks."""
+"""PII pipeline primitives: findings, policy eligibility and overlap resolution.
+
+Detection itself is routed by app.pii.flows; structural decomposition is
+centralized in app.pii.structural.
+"""
 
 from __future__ import annotations
 
@@ -305,54 +309,6 @@ def get_ner():
 
         _ner = NerClient()
     return _ner
-
-
-def _normalize_structured_findings(
-    text: str,
-    findings: list[Finding],
-) -> list[Finding]:
-    """Split composite PERSON/ADDRESS spans into value-only structural parts."""
-    from app.pii.parts import split_address_span, split_person_span
-
-    normalized: list[Finding] = []
-    for finding in findings:
-        detector = (finding.detector or "").lower()
-        is_ml = (
-            detector == "ml"
-            or detector.startswith("ml")
-            or "ner" in detector
-            or "rubert" in detector
-        )
-        if finding.type == "ADDRESS" and (
-            is_ml or not getattr(finding, "part", "")
-        ):
-            normalized.extend(
-                split_address_span(
-                    text,
-                    finding.start,
-                    finding.end,
-                    finding.score,
-                    finding.detector,
-                    decision=getattr(finding, "decision", "mask"),
-                    reason=getattr(finding, "reason", "") or "",
-                )
-            )
-            continue
-        if finding.type == "PERSON" and " " in text[finding.start : finding.end]:
-            normalized.extend(
-                split_person_span(
-                    text,
-                    finding.start,
-                    finding.end,
-                    finding.score,
-                    finding.detector,
-                    decision=getattr(finding, "decision", "mask"),
-                    reason=getattr(finding, "reason", "") or "",
-                )
-            )
-            continue
-        normalized.append(finding)
-    return normalized
 
 
 def detect_pii(
