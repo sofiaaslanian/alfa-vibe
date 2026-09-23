@@ -78,7 +78,7 @@ class ProcessService:
                 out.append(f)
         return out
 
-    def _ner_for_system(self, system: Optional[str], need_context_ml: bool) -> bool:
+    def _context_ml_for_system(self, system: Optional[str], need_context_ml: bool) -> bool:
         """Enable ML only when a context-defined PII type is actually needed.
 
         Routing is separate from detection logic: a system may deliberately
@@ -86,12 +86,13 @@ class ProcessService:
         """
         if not need_context_ml:
             return False
-        if os.getenv("NER_ENABLED", "0") != "1":
+        master = os.getenv("CONTEXT_ML_ENABLED", os.getenv("NER_ENABLED", "0"))
+        if master != "1":
             return False
         if not system:
             return False
         if system in self.config.systems:
-            flag = self.config.systems[system].use_ner
+            flag = self.config.systems[system].use_context_ml
             if flag is not None:
                 return flag
         if system in {"autotest", "high_rps", "format_only"}:
@@ -102,7 +103,7 @@ class ProcessService:
         allowed_set = self._allowed_types(system)
         need_context_ml = allowed_set is None or bool(allowed_set & CONTEXT_TYPES)
         findings = detect_pii(
-            text, enable_ner=self._ner_for_system(system, need_context_ml)
+            text, enable_ner=self._context_ml_for_system(system, need_context_ml)
         )
         if allowed_set:
             findings = [
