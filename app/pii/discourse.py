@@ -63,6 +63,17 @@ _PATRONYMIC_TOKEN_RE = re.compile(
     r"(?i)(?:ич(?:а|у|ем|е)?|вн(?:а|ы|е|у|ой)|ичн(?:а|ы|е|у|ой))$"
 )
 
+# Narrative continuation right after a full FIO: the named person is being
+# described as a third party («… пришёл в банк», «… любит кофе»), not the
+# data subject. A bare FIO with nothing after it stays personal.
+_NARRATIVE_AFTER_RE = re.compile(
+    r"(?i)^\s*[,;:—–-]?\s*"
+    r"(?:приш[её]л|пришл[аи]|любит|работает|жив[её]т|учится|читает|"
+    r"сказал|заявил|отметил|написал|купил|продал|основал|возглавил|"
+    r"родился|умер|стал|был|была|ходил|ходила|поехал|поехала)"
+    r"\b"
+)
+
 
 def _looks_like_full_patronymic_fio(value: str) -> bool:
     tokens = value.split()
@@ -124,6 +135,13 @@ def is_personal_person_mention(text: str, start: int, end: int) -> bool:
         return True
     if third:
         return False
+    # Full FIO with patronymic (last + first + patronymic) is personal data
+    # even without an explicit role cue, unless it continues into a third-party
+    # narrative («… пришёл в банк», «… любит кофе»). Two-part names still need
+    # context so celebrity/third-party mentions stay clear.
+    if _looks_like_full_patronymic_fio(text[start:end]):
+        if not _NARRATIVE_AFTER_RE.search(right):
+            return True
     if _looks_like_full_patronymic_fio(text[start:end]) and CONTACT_AFTER_RE.search(right):
         return True
     return contact or banking_strong or client or claim
