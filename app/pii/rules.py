@@ -524,6 +524,19 @@ def _detect_role_dates(text: str, want_role: str, pii_type: str, detector: str) 
             role = _nearest_label(text, m.start(), DATE_ROLE_LABELS, max_dist=60)
             if role != want_role:
                 continue
+            if want_role == "issue":
+                # A bare «выдан» is not enough: it may describe a loan/order/document.
+                # Confirm that the same sentence fragment is passport-related.
+                left = _left(text, m.start(), 120)
+                clause = re.split(r"[.!?\n]", left)[-1]
+                if not (
+                    re.search(r"(?i)дата\s+выдач\w*\s+паспорт", clause)
+                    or (
+                        re.search(r"(?i)паспорт\w*", clause)
+                        and re.search(r"(?i)выдан\w*", clause)
+                    )
+                ):
+                    continue
             if want_role == "birth":
                 left = _left(text, m.start(), 100)
                 if _has_any(left, [r"пример", r"шаблон"]) and _has_any(
