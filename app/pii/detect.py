@@ -200,31 +200,30 @@ def _overlap_union(candidate: Finding, hits: list[Finding]) -> Finding:
 
 
 def _accept_candidate(accepted: list[Finding], candidate: Finding) -> list[Finding]:
+    """Apply semantic precedence before span size.
+
+    Accepted findings are processed in descending semantic priority and span
+    length. A later generic candidate must not evict a more specific role
+    merely because its span is wider. Same-type overlaps merge while keeping
+    their type; true cross-type partial conflicts are conservatively unioned.
+    """
     hits = [finding for finding in accepted if _overlaps(candidate, finding)]
     if not hits:
         return [*accepted, candidate]
+
+    if all(hit.type == candidate.type for hit in hits):
+        kept = [finding for finding in accepted if finding not in hits]
+        return [*kept, _overlap_union(candidate, hits)]
+
+    candidate_priority = PRIORITY.get(candidate.type, 0)
+    if any(PRIORITY.get(hit.type, 0) > candidate_priority for hit in hits):
+        return accepted
+
     if any(hit.start <= candidate.start and candidate.end <= hit.end for hit in hits):
         return accepted
 
-    contained = [
-        hit
-        for hit in hits
-        if candidate.start <= hit.start and hit.end <= candidate.end
-    ]
-    if contained and len(contained) == len(hits):
-        # Candidates are processed by descending type priority. A wider,
-        # lower-priority entity must not swallow an already accepted,
-        # higher-priority semantic entity (e.g. PERSON around CITIZENSHIP).
-        candidate_priority = PRIORITY.get(candidate.type, 0)
-        strongest_hit = max(PRIORITY.get(hit.type, 0) for hit in contained)
-        if candidate_priority < strongest_hit:
-            return accepted
-        kept = [finding for finding in accepted if finding not in contained]
-        return [*kept, candidate]
-
     kept = [finding for finding in accepted if finding not in hits]
     return [*kept, _overlap_union(candidate, hits)]
-
 
 def _append_uncovered_allows(
     accepted: list[Finding],
