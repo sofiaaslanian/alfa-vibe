@@ -1,0 +1,32 @@
+name: Stage 3 public server probe
+
+on:
+  push:
+    branches: [experiment/stage3-load-eval]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: experiment/stage3-load-eval
+          persist-credentials: false
+      - name: Probe public server
+        shell: bash
+        run: |
+          set +e
+          echo "=== HTTP /ready ==="
+          curl -v --connect-timeout 5 --max-time 10 http://135.106.220.67/ready
+          echo
+          echo "=== HTTP /health ==="
+          curl -v --connect-timeout 5 --max-time 10 http://135.106.220.67/health
+          echo
+          echo "=== HTTPS /ready ==="
+          curl -vk --connect-timeout 5 --max-time 10 https://135.106.220.67/ready
+          exit 0
