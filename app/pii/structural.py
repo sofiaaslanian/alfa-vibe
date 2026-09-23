@@ -11,32 +11,16 @@ from app.pii.catalog import BY_TYPE, StructureKind
 from app.pii.detect import Finding
 
 
-def _split_series_number(
-    text: str,
-    finding: Finding,
-) -> list[Finding]:
-    """Split a confirmed 10-digit document number into 4-digit series + 6-digit number.
-
-    Non-digits between the first four digits stay outside the semantic value
-    except separators inside the series itself (e.g. "45 11").
-    """
-    positions = [
-        i for i in range(finding.start, finding.end)
-        if text[i].isdigit()
-    ]
+def _split_series_number(text: str, finding: Finding) -> list[Finding]:
+    positions = [i for i in range(finding.start, finding.end) if text[i].isdigit()]
     if len(positions) != 10:
         return [finding]
-
-    series_start = positions[0]
-    series_end = positions[3] + 1
-    number_start = positions[4]
-    number_end = positions[9] + 1
 
     return [
         Finding(
             finding.type,
-            series_start,
-            series_end,
+            positions[0],
+            positions[3] + 1,
             finding.score,
             finding.detector,
             getattr(finding, "decision", "mask"),
@@ -45,8 +29,8 @@ def _split_series_number(
         ),
         Finding(
             finding.type,
-            number_start,
-            number_end,
+            positions[4],
+            positions[9] + 1,
             finding.score,
             finding.detector,
             getattr(finding, "decision", "mask"),
@@ -56,67 +40,70 @@ def _split_series_number(
     ]
 
 
-def normalize_structures(text: str, findings: list[Finding]) -> list[Finding]:
-    from app.pii.parts import split_address_span, split_person_span, split_cardholder_span
+def _split_person(text: str, finding: Finding) -> list[Finding]:
+    from app.pii.parts import split_person_span
 
+    return split_person_span(
+        text,
+        finding.start,
+        finding.end,
+        finding.score,
+        finding.detector,
+        decision=getattr(finding, "decision", "mask"),
+        reason=getattr(finding, "reason", "") or "",
+    )
+
+
+def _split_address(text: str, finding: Finding) -> list[Finding]:
+    from app.pii.parts import split_address_span
+
+    return split_address_span(
+        text,
+        finding.start,
+        finding.end,
+        finding.score,
+        finding.detector,
+        decision=getattr(finding, "decision", "mask"),
+        reason=getattr(finding, "reason", "") or "",
+    )
+
+
+def _split_cardholder(text: str, finding: Finding) -> list[Finding]:
+    from app.pii.parts import split_cardholder_span
+
+    return split_cardholder_span(
+        text,
+        finding.start,
+        finding.end,
+        finding.score,
+        finding.detector,
+    )
+
+
+def _normalize_composite(text: str, finding: Finding) -> list[Finding]:
+    if getattr(finding, "part", ""):
+        return [finding]
+
+    splitters = {
+        "PERSON": _split_person,
+        "ADDRESS": _split_address,
+        "CARDHOLDER_NAME": _split_cardholder,
+        "PASSPORT": _split_series_number,
+        "DRIVER_LICENSE": _split_series_number,
+    }
+    splitter = splitters.get(finding.type)
+    return splitter(text, finding) if splitter else [finding]
+
+
+def _normalize_one(text: str, finding: Finding) -> list[Finding]:
+    spec = BY_TYPE.get(finding.type)
+    if spec is None or spec.structure == StructureKind.ATOMIC:
+        return [finding]
+    return _normalize_composite(text, finding)
+
+
+def normalize_structures(text: str, findings: list[Finding]) -> list[Finding]:
     out: list[Finding] = []
     for finding in findings:
-        spec = BY_TYPE.get(finding.type)
-        if spec is None or spec.structure == StructureKind.ATOMIC:
-            out.append(finding)
-            continue
-
-        # Already structurally decomposed by a legacy detector.
-        # Keep it unchanged during migration; detector-specific splitting will
-        # be removed only after output-equivalence is proven.
-        if getattr(finding, "part", ""):
-            out.append(finding)
-            continue
-
-        if finding.type == "PERSON":
-            out.extend(
-                split_person_span(
-                    text,
-                    finding.start,
-                    finding.end,
-                    finding.score,
-                    finding.detector,
-                    decision=getattr(finding, "decision", "mask"),
-                    reason=getattr(finding, "reason", "") or "",
-                )
-            )
-            continue
-
-        if finding.type == "ADDRESS":
-            out.extend(
-                split_address_span(
-                    text,
-                    finding.start,
-                    finding.end,
-                    finding.score,
-                    finding.detector,
-                    decision=getattr(finding, "decision", "mask"),
-                    reason=getattr(finding, "reason", "") or "",
-                )
-            )
-            continue
-
-        if finding.type == "CARDHOLDER_NAME":
-            out.extend(
-                split_cardholder_span(
-                    text,
-                    finding.start,
-                    finding.end,
-                    finding.score,
-                    finding.detector,
-                )
-            )
-            continue
-
-        if finding.type in {"PASSPORT", "DRIVER_LICENSE"}:
-            out.extend(_split_series_number(text, finding))
-            continue
-
-        out.append(finding)
-
+        out.extend(_normalize_one(text, finding))
     return out
