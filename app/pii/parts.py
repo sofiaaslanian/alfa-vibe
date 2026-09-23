@@ -21,19 +21,24 @@ _LAT_TOKEN_RE = re.compile(r"[A-Z][A-Za-z\-]*")
 # are PII. Keeping those labels outside the findings preserves prompt semantics.
 _ADDR_INDEX_RE = re.compile(r"(?<!\d)(?P<value>\d{6})(?!\d)")
 _ADDR_CITY_RE = re.compile(
-    r"(?i)(?:(?:г\.|город)\s*)?(?P<value>[А-ЯЁ][А-Яа-яЁё\-]+)"
+    r"(?:(?i:г\.|город)\s*)?(?P<value>[А-ЯЁ][А-Яа-яЁё\-]+)"
 )
 _ADDR_STREET_LABEL = (
     r"(?:ул\.|улица|улице|улицу|пр\.|пр\-т|проспект|проспекте|"
     r"пер\.|переулок|переулке|ш\.|шоссе|б\-р|бульвар|бульваре|"
     r"наб\.|набережная|набережной|пл\.|площадь|площади)"
 )
-_ADDR_STREET_WORDS = r"[А-ЯЁа-яёA-Za-z0-9\-\.]+(?:\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+){0,2}"
+_ADDR_NAME_STOP = r"(?:на|в|во|по|у|к|из|от|до|для|г|город|д|дом|кв|квартира)"
+_ADDR_NAME_TOKEN = (
+    rf"(?!(?:{_ADDR_NAME_STOP})(?=$|\s))"
+    r"[А-ЯЁа-яёA-Za-z][А-ЯЁа-яёA-Za-z0-9\-\.]*"
+)
+_ADDR_STREET_WORDS = rf"{_ADDR_NAME_TOKEN}(?:\s+{_ADDR_NAME_TOKEN}){{0,2}}"
 _ADDR_STREET_PREFIX_RE = re.compile(
-    rf"(?i){_ADDR_STREET_LABEL}\s+(?P<value>{_ADDR_STREET_WORDS})"
+    rf"(?i:{_ADDR_STREET_LABEL})\s+(?P<value>{_ADDR_STREET_WORDS})"
 )
 _ADDR_STREET_SUFFIX_RE = re.compile(
-    rf"(?i)(?P<value>{_ADDR_STREET_WORDS})\s+{_ADDR_STREET_LABEL}"
+    rf"(?P<value>{_ADDR_STREET_WORDS})\s+(?i:{_ADDR_STREET_LABEL})"
 )
 _ADDR_HOUSE_RE = re.compile(r"(?i)(?:д\.|дом)\s*(?P<value>\d+[А-ЯA-Z]?)")
 _ADDR_FLAT_RE = re.compile(r"(?i)(?:кв\.|квартира)\s*(?P<value>\d+)")
