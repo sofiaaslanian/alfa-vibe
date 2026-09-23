@@ -150,6 +150,7 @@ def is_personal_inn_mention(text: str, start: int, end: int) -> bool:
     """Keep valid INN unless the left context marks a non-personal role."""
     from app.pii.claims import INN_PERSONAL_RE, INN_PUBLIC_RE
 
+    _ = end
     left_ctx = _left(text, start)
     if INN_PERSONAL_RE.search(left_ctx):
         return True
@@ -269,7 +270,7 @@ def is_personal_place_of_birth_mention(text: str, start: int, end: int) -> bool:
     )
     client_near = bool(
         re.search(
-            r"(?i)(?<![А-Яа-яЁёA-Za-z])(?:клиент\w*|пользовател\w*|заявител\w*)",
+            r"(?i)(?<![А-ЯЁA-Z])(?:клиент\w*|пользовател\w*|заявител\w*)",
             left,
         )
     )
