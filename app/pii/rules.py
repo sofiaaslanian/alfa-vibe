@@ -539,6 +539,41 @@ def detect_birth_date(text: str) -> list[Finding]:
     return _detect_role_dates(text, "birth", "BIRTH_DATE", "birth_date_rule_v1")
 
 
+def detect_passport_issue_date(text: str) -> list[Finding]:
+    return _detect_role_dates(text, "issue", "PASSPORT_ISSUE_DATE", "passport_issue_date_rule_v1")
+
+
+# --- passport ---
+PASSPORT_SPLIT_RE = re.compile(
+    r"серия\s+(\d{2}\s?\d{2})\s*,?\s*номер\s+(\d{6})",
+    re.IGNORECASE,
+)
+PASSPORT_ANCHORED_RE = re.compile(
+    r"(?i)(?:паспорт[а-яё]*|пасп\.?|серия)"
+    r"(?:[\s,.:;!?()«»\"'\-]+[а-яё]+){0,3}"
+    r"[\s,.:;!?()«»\"'№\-]*"
+    r"(\d{2}[\s\-]?\d{2})"
+    r"[\s\-]*(?:(?:№|номер)[\s№:.\-]*)?"
+    r"(\d{6})"
+    r"(?:\D|$)"
+)
+PASSPORT_COMBINED_RE = re.compile(
+    r"(?<!\d)(\d{2}\s\d{2}\s\d{6}|\d{4}\s?\d{6}|\d{10})(?!\d)"
+)
+PASSPORT_POS = [r"паспорт", r"пасп\."]
+PASSPORT_NEG = [
+    r"номер\s+заказ",
+    r"заявк",
+    r"номер\s+договор",
+    r"артикул",
+    r"накладн",
+    r"пример",
+    r"формат",
+    r"инструкц",
+    r"шаблон",
+]
+
+
 def detect_passport(text: str) -> list[Finding]:
     """Confirm one passport object; structural layer splits series/number."""
     out: list[Finding] = []
