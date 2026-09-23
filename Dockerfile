@@ -20,6 +20,10 @@ RUN python -m zipfile -e ui/icons.zip ui/icons \
     && python -m zipfile -e ui/photos.zip ui/photos
 COPY docs/acceptance_cases.json docs/holdout_cases.json docs/acceptance_summary.json \
      docs/load_results.json docs/criteria_checklist.json ./docs/
+
+RUN useradd --system --no-create-home --uid 10001 app
+USER app
+
 EXPOSE 8080
 
 # Multi-worker; Redis required for shared state (see docker-compose).
