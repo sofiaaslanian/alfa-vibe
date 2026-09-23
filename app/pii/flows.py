@@ -100,8 +100,8 @@ class ContextFlow:
         if ml_findings is None:
             return FlowResult(ContextFlow._rule_candidates(text), "context_rules_fallback")
 
-        # A list (including an empty list) means ML is authoritative for
-        # every context type the deployed model actually covers.
+        # ML adds candidates, but a model miss must not suppress a precise
+        # labelled/role rule. Downstream overlap resolution removes duplicates.
         from app.pii.context_ml import ML_COVERED_CONTEXT_TYPES
 
         findings = [
@@ -109,24 +109,8 @@ class ContextFlow:
             for f in ml_findings
             if f.type in ML_COVERED_CONTEXT_TYPES
         ]
-
-        # Explicit migration fallback only for context types the current model
-        # cannot express. This is not a fallback for ML misses.
-        unsupported = {
-            "PERSON",
-            "ADDRESS",
-            "PLACE_OF_BIRTH",
-            "CITIZENSHIP",
-            "PASSPORT_ISSUER",
-            "CARDHOLDER_NAME",
-        } - set(ML_COVERED_CONTEXT_TYPES)
-        if unsupported:
-            findings.extend(
-                f
-                for f in ContextFlow._rule_candidates(text)
-                if f.type in unsupported
-            )
-        return FlowResult(findings, "context_ml_with_explicit_coverage_fallback")
+        findings.extend(ContextFlow._rule_candidates(text))
+        return FlowResult(findings, "context_ml_union_rules")
 
 
 def run_detection_flows(
