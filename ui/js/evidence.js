@@ -10,19 +10,19 @@ function renderEvidenceKpis(evidence, ready, live) {
   document.getElementById("kpi-ready").textContent = ready.status || "—";
   document.getElementById("kpi-requests").textContent = String(live.process_total);
   document.getElementById("kpi-latency").textContent =
-    live.avg_latency_ms != null ? `${live.avg_latency_ms.toFixed(1)} ms` : "—";
+    live.avg_latency_ms == null ? "—" : `${live.avg_latency_ms.toFixed(1)} ms`;
   document.getElementById("kpi-tokens").textContent = String(Math.round(live.tokens));
   document.getElementById("holdout").textContent =
     `Holdout cases: ${evidence.holdout?.cases ?? 0} · ${evidence.holdout?.note || ""}`;
 }
 
 function loadProfileRow(profile) {
-  const status = profile.status || (profile.rps != null ? "ok" : "—");
+  const status = profile.status || (profile.rps == null ? "—" : "ok");
   return `<tr>
     <td>${esc(profile.name)}</td>
     <td>${esc(profile.host)}</td>
-    <td>${profile.rps != null ? profile.rps : "—"}</td>
-    <td>${profile.p95_ms != null ? profile.p95_ms + " ms" : "—"}</td>
+    <td>${profile.rps ?? "—"}</td>
+    <td>${profile.p95_ms == null ? "—" : profile.p95_ms + " ms"}</td>
     <td>${esc(status)}</td>
   </tr>`;
 }

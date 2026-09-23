@@ -72,19 +72,19 @@ const Dash = {
     const barH = (v) => Math.max(v > 0 ? 4 : 0, (v / max) * frame.plotH);
 
     let plotSvg = frame.svg;
-    labels.forEach((_, gi) => {
+    for (const gi of labels.keys()) {
       const gx = pad.left + gi * groupW + groupW / 2;
       const groupStart = gx - (series.length * barW + (series.length - 1) * gap) / 2;
 
-      series.forEach((s, si) => {
+      for (const [si, s] of series.entries()) {
         const v = s.values[gi];
         const h = barH(v);
         const x = groupStart + si * (barW + gap);
         const y = pad.top + frame.plotH - h;
         const color = highlightIndex === gi && si === 1 ? this.colors.red : s.color;
         plotSvg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${h.toFixed(1)}" rx="4" fill="${color}"/>`;
-      });
-    });
+      }
+    }
 
     this.mountChart(container, { labels, yMax: max, plotSvg });
   },
@@ -99,11 +99,11 @@ const Dash = {
     const C = 2 * Math.PI * r;
     let offset = 0;
     let svg = `<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="Круговая диаграмма">`;
-    segments.forEach((seg) => {
+    for (const seg of segments) {
       const len = (seg.value / total) * C;
       svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${stroke}" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
       offset += len;
-    });
+    }
     svg += '</svg>';
     container.insertAdjacentHTML('afterbegin', svg);
   },
@@ -142,14 +142,14 @@ const Dash = {
     const coords = this._plotCoords(labels, series);
     let plotSvg = coords.svg;
 
-    series.forEach((s) => {
+    for (const s of series) {
       const pts = s.values.map((v, i) => `${coords.xAt(i).toFixed(1)},${coords.yAt(v).toFixed(1)}`).join(' ');
       plotSvg += `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
-      s.values.forEach((v, i) => {
+      for (const [i, v] of s.values.entries()) {
         const isPeak = highlightIndex === i;
         plotSvg += `<circle cx="${coords.xAt(i).toFixed(1)}" cy="${coords.yAt(v).toFixed(1)}" r="${isPeak ? 5 : 3.5}" fill="${isPeak ? this.colors.red : s.color}"/>`;
-      });
-    });
+      }
+    }
 
     this.mountChart(container, { labels, yMax: coords.max, plotSvg });
   },
@@ -159,7 +159,7 @@ const Dash = {
     let plotSvg = coords.svg;
     const baseline = coords.pad.top + coords.plotH;
 
-    series.forEach((s) => {
+    for (const s of series) {
       const top = s.values.map((v, i) => `${coords.xAt(i).toFixed(1)},${coords.yAt(v).toFixed(1)}`).join(' L ');
       const area = `M ${coords.xAt(0).toFixed(1)},${baseline} L ${top} L ${coords.xAt(labels.length - 1).toFixed(1)},${baseline} Z`;
       plotSvg += `<path d="${area}" fill="${s.color}" fill-opacity="0.18"/>`;
@@ -167,7 +167,7 @@ const Dash = {
         .map((v, i) => `${coords.xAt(i).toFixed(1)},${coords.yAt(v).toFixed(1)}`)
         .join(' ');
       plotSvg += `<polyline points="${points}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
-    });
+    }
 
     this.mountChart(container, { labels, yMax: coords.max, plotSvg });
   },
@@ -184,19 +184,19 @@ const Dash = {
     const barW = Math.min(22, groupW - 10);
 
     let plotSvg = frame.svg;
-    labels.forEach((_, gi) => {
+    for (const gi of labels.keys()) {
       const gx = pad.left + gi * groupW + groupW / 2;
       const x = gx - barW / 2;
       let stackY = pad.top + frame.plotH;
 
-      series.forEach((s, si) => {
+      for (const [si, s] of series.entries()) {
         const v = s.values[gi];
         const h = Math.max(v > 0 ? 4 : 0, (v / max) * frame.plotH);
         stackY -= h;
         const color = highlightIndex === gi && si === series.length - 1 ? this.colors.red : s.color;
         plotSvg += `<rect x="${x.toFixed(1)}" y="${stackY.toFixed(1)}" width="${barW}" height="${h.toFixed(1)}" rx="${si === 0 ? 4 : 0}" fill="${color}"/>`;
-      });
-    });
+      }
+    }
 
     this.mountChart(container, { labels, yMax: max, plotSvg });
   },

@@ -177,8 +177,8 @@ function highlightOriginal(text, findings) {
   const ordered = [...findings].sort((a, b) => a.start - b.start);
   let html = "";
   let cursor = 0;
-  ordered.forEach((f, i) => {
-    if (f.start < cursor) return;
+  for (const [i, f] of ordered.entries()) {
+    if (f.start < cursor) continue;
     html += esc(text.slice(cursor, f.start));
     const allow = (f.decision || "mask") === "allow";
     const cls = [
@@ -189,7 +189,7 @@ function highlightOriginal(text, findings) {
       .join(" ");
     html += `<mark class="${cls}" data-idx="${i}" tabindex="0">${esc(text.slice(f.start, f.end))}</mark>`;
     cursor = f.end;
-  });
+  }
   html += esc(text.slice(cursor));
   return html;
 }
@@ -198,11 +198,11 @@ function highlightMasked(masked) {
   if (!masked) return "";
   let html = esc(masked);
   // scoped tokens ⟦PII_TYPE_hex⟧ or angle <TYPE_n>
-  html = html.replace(
+  html = html.replaceAll(
     /⟦PII_[A-Z_]+_[0-9a-f]+⟧/gi,
     (m) => `<span class="pd-token">${m}</span>`
   );
-  html = html.replace(
+  html = html.replaceAll(
     /&lt;([A-Z_]+)_(\d+)&gt;/g,
     '<span class="pd-token">&lt;$1_$2&gt;</span>'
   );
@@ -215,9 +215,9 @@ function setFocus(idx) {
   const f = lastData.findings[idx];
   els.panelOriginal.innerHTML = highlightOriginal(lastData.original, lastData.findings);
   bindSpanClicks();
-  els.findList.querySelectorAll(".pd-find").forEach((el, i) => {
+  for (const [i, el] of els.findList.querySelectorAll(".pd-find").entries()) {
     el.classList.toggle("is-focus", i === idx);
-  });
+  }
   if (f) {
     const allow = (f.decision || "mask") === "allow";
     const decision = allow ? "ALLOW" : "MASK";
@@ -228,7 +228,7 @@ function setFocus(idx) {
 }
 
 function bindSpanClicks() {
-  els.panelOriginal.querySelectorAll(".pd-span").forEach((el) => {
+  for (const el of els.panelOriginal.querySelectorAll(".pd-span")) {
     el.addEventListener("click", () => setFocus(Number(el.dataset.idx)));
     el.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
@@ -236,7 +236,7 @@ function bindSpanClicks() {
         setFocus(Number(el.dataset.idx));
       }
     });
-  });
+  }
 }
 
 function renderFindingsList(findings) {
@@ -259,9 +259,9 @@ function renderFindingsList(findings) {
       </div>`;
     })
     .join("");
-  els.findList.querySelectorAll(".pd-find").forEach((el) => {
+  for (const el of els.findList.querySelectorAll(".pd-find")) {
     el.addEventListener("click", () => setFocus(Number(el.dataset.idx)));
-  });
+  }
 }
 
 function renderXray(data) {
@@ -427,9 +427,9 @@ function selectScenario(s) {
   customMode = false;
   activeScenario = s;
   els.input.value = s.text;
-  els.groups.querySelectorAll(".pd-chip").forEach((b) => {
+  for (const b of els.groups.querySelectorAll(".pd-chip")) {
     b.classList.toggle("is-active", b.dataset.id === s.id);
-  });
+  }
   resetUI();
 }
 
@@ -437,20 +437,22 @@ function markCustomEdit() {
   if (activeScenario && els.input.value === activeScenario.text) return;
   customMode = true;
   activeScenario = { id: "custom", group: "custom", label: "Свой текст", verdictKind: null, reason: "" };
-  els.groups.querySelectorAll(".pd-chip").forEach((b) => b.classList.remove("is-active"));
+  for (const b of els.groups.querySelectorAll(".pd-chip")) {
+    b.classList.remove("is-active");
+  }
 }
 
 function renderScenarioGroups() {
   els.groups.innerHTML = "";
-  GROUPS.forEach((g) => {
+  for (const g of GROUPS) {
     const items = SCENARIOS.filter((s) => s.group === g.id);
-    if (!items.length) return;
+    if (!items.length) continue;
     const wrap = document.createElement("div");
     wrap.className = "pd-group";
     wrap.innerHTML = `<div class="pd-group__label">${esc(g.label)}</div>`;
     const chips = document.createElement("div");
     chips.className = "pd-chips";
-    items.forEach((s) => {
+    for (const s of items) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "pd-chip" + (s.id === activeScenario.id ? " is-active" : "");
@@ -458,10 +460,10 @@ function renderScenarioGroups() {
       b.textContent = s.label;
       b.addEventListener("click", () => selectScenario(s));
       chips.appendChild(b);
-    });
+    }
     wrap.appendChild(chips);
     els.groups.appendChild(wrap);
-  });
+  }
 }
 
 function updateConsumerLine() {
