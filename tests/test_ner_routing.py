@@ -19,7 +19,7 @@ def test_context_ml_routing_by_system(monkeypatch):
     assert svc._context_ml_for_system("high_rps", need_context_ml=True) is False
     assert svc._context_ml_for_system("format_only", need_context_ml=False) is False
     # Public /process has no X-System and maps to the autotest profile.
-    assert svc._context_ml_for_system(None, need_context_ml=True) is False
+    assert svc._context_ml_for_system(None, need_context_ml=True) is True
 
 
 def test_context_ml_master_switch_off(monkeypatch):
