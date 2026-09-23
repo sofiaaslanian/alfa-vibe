@@ -106,16 +106,19 @@ flowchart TD
 
 Candidate detection and role confirmation are logically separate even when a legacy regex currently performs both operations in one function.
 
-## 5. Flow C — context-defined / ML-first
+## 5. Flow C — context-defined / hybrid ML + precise rules
 
 Types: PERSON, PLACE_OF_BIRTH, CITIZENSHIP, PASSPORT_ISSUER, ADDRESS, CARDHOLDER_NAME.
 
 ~~~mermaid
 flowchart TD
     A[Text] --> B[NER / ML entity extraction]
+    A --> R[Precise labelled / role rules]
     B --> C[Raw semantic entity]
     C --> D[Context role mapping]
-    D --> E{PII business role?}
+    D --> U[Union of ML + rule candidates]
+    R --> U
+    U --> E{PII business role?}
     E -- No --> X[Drop]
     E -- Yes --> F[Canonical PII type]
 ~~~
@@ -134,11 +137,11 @@ Examples:
     ORG + "паспорт выдан"          -> PASSPORT_ISSUER
     CITY/STREET/HOUSE + address role -> ADDRESS
 
-Important contract: when ML is enabled for a request, an empty ML result is authoritative for every type the selected model can express. The pipeline does not silently replace an ML miss with legacy context rules.
+Current contract: when context ML is enabled, ML findings are combined with precise labelled / role rules. A model miss therefore does not suppress a deterministic rule hit. Downstream policy, structural normalization, and overlap resolution remove invalid or duplicate candidates.
 
-Current model coverage is 5/6 context types: PERSON, PLACE_OF_BIRTH, CITIZENSHIP, ADDRESS, CARDHOLDER_NAME. The selected RuBERT model has no ORG label, so PASSPORT_ISSUER has one explicit temporary rules fallback. This fallback is isolated and should disappear when an ORG-capable context model is connected.
+Current model coverage is 5/6 context types: PERSON, PLACE_OF_BIRTH, CITIZENSHIP, ADDRESS, CARDHOLDER_NAME. PASSPORT_ISSUER is currently covered by the rules path because the selected RuBERT model has no ORG label.
 
-When context ML is disabled entirely, old labelled rules act as compatibility fallback for the whole context group.
+When context ML is disabled, the same precise rules remain the active compatibility path for the context group.
 
 ## 6. Shared structural layer
 
@@ -181,7 +184,7 @@ Detector functions return a confirmed object span. Composite splitting lives in 
 
 System config decides whether it wants context ML:
 
-- autotest: use_context_ml = true
+- autotest: use_context_ml = false
 - demo: true
 - format_only: false
 - high_rps: false
@@ -203,7 +206,7 @@ Routing:
             yes
               -> system use_context_ml?
                   false -> compatibility rules
-                  true -> authoritative ML context flow
+                  true -> hybrid ML + precise rules
 
 If required context ML raises an error in the target profile, the request fails closed. It does not silently switch to rules. An explicit fail-open mode exists only as a compatibility option.
 
