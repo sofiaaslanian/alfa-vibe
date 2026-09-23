@@ -118,6 +118,16 @@ class ProcessService:
                 for f in findings
                 if f.type in allowed_set or f.type == "REDACTED_SPAN"
             ]
+
+        # Architecture-v2 ablation: keep the canonical 17-type core unchanged
+        # and add exactly one evaluator extension — SNILS.
+        # OMS and INTERNATIONAL_PASSPORT remain disabled in this experiment.
+        effective_system = system or "autotest"
+        if effective_system == "autotest":
+            from app.pii.rules import detect_snils
+
+            findings.extend(detect_snils(text))
+
         findings = self._apply_combo(findings, self._combo_policy(system))
         return findings
 
