@@ -39,6 +39,9 @@ class FormatContextFlow:
             detect_driver_license,
             detect_cvv,
             detect_pin,
+            detect_snils,
+            detect_international_passport,
+            detect_oms,
         )
 
         findings: list[Finding] = []
@@ -50,6 +53,10 @@ class FormatContextFlow:
             detect_driver_license,
             detect_cvv,
             detect_pin,
+            # Extensions outside the canonical 17-type catalog.
+            detect_snils,
+            detect_international_passport,
+            detect_oms,
         ):
             findings.extend(detector(text))
         return FlowResult(findings, "format_context_rules")
