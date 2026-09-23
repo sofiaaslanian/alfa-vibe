@@ -1,283 +1,230 @@
-# Architecture v2 — 3 detection flows + shared structural layer
+# Architecture v2 — 3 PII flows + structural layer
 
-Baseline for comparison: `experiment/p1-address-rollback`, external score **9465**.
-This branch is an architectural rebuild and is **not** a new accepted scoring baseline yet.
+Baseline for the refactor: scorer-best branch 9465 (experiment/p1-address-rollback).
 
-## 1. Canonical product model
+The architecture has two independent axes:
 
-The product table defines two independent axes:
+1. How the value is identified — one of three detection groups.
+2. How the confirmed value is structured — atomic or composite.
 
-1. **Detection method** — how we decide what the PII is.
-2. **Structure** — whether a confirmed PII object is atomic or composite.
+The structural decision is made after the PII type is confirmed.
 
-The canonical evaluator core contains exactly **17 types**.
+## 1. Canonical 17 types
 
-### Group A — context-defined → ML-first
+| PII type | Internal type | Detection group | Structure |
+|---|---|---|---|
+| ФИО | PERSON | Context / ML | Composite |
+| Место рождения | PLACE_OF_BIRTH | Context / ML | Atomic |
+| Гражданство | CITIZENSHIP | Context / ML | Atomic |
+| Орган, выдавший паспорт | PASSPORT_ISSUER | Context / ML | Atomic |
+| Адрес | ADDRESS | Context / ML | Composite |
+| Имя держателя карты | CARDHOLDER_NAME | Context / ML | Composite |
+| Дата рождения | BIRTH_DATE | Format + context / rules | Atomic |
+| Серия и номер паспорта | PASSPORT | Format + context / rules | Composite |
+| Код подразделения | SUBDIVISION_CODE | Format + context / rules | Atomic |
+| Дата выдачи паспорта | PASSPORT_ISSUE_DATE | Format + context / rules | Atomic |
+| Серия и номер ВУ | DRIVER_LICENSE | Format + context / rules | Composite |
+| CVV | CVV | Format + context / rules | Atomic |
+| PIN | PIN | Format + context / rules | Atomic |
+| Email | EMAIL | Format / rules | Atomic |
+| Телефон | PHONE | Format / rules | Atomic |
+| ИНН | INN | Format / rules | Atomic |
+| Номер банковской карты | PAYMENT_CARD | Format / rules | Atomic |
 
-- PERSON
-- PLACE_OF_BIRTH
-- CITIZENSHIP
-- PASSPORT_ISSUER
-- ADDRESS
-- CARDHOLDER_NAME
-
-### Group B — format + context → rules-based
-
-- BIRTH_DATE
-- PASSPORT
-- SUBDIVISION_CODE
-- PASSPORT_ISSUE_DATE
-- DRIVER_LICENSE
-- CVV
-- PIN
-
-### Group C — format-defined → rules-based
-
-- EMAIL
-- PHONE
-- INN
-- PAYMENT_CARD
-
-Bonus document types such as SNILS / OMS / international passport remain extensions and are not part of the canonical catalog.
-
----
+Core evaluator pipeline contains exactly these 17 types. SNILS / OMS / international passport remain optional extensions outside the canonical core flow.
 
 ## 2. Common pipeline
 
-```text
-INPUT TEXT
-    │
-    ├──────────────────────────────────────────────┐
-    │                                              │
-    ▼                                              ▼
-FORMAT FLOW                                FORMAT+CONTEXT FLOW
-rules / parser                            rules / parser
-    │                                              │
-    │                                     format candidate
-    │                                              │
-    │                                     context confirmation
-    │                                              │
-    └──────────────────────┬───────────────────────┘
-                           │
-                           │
-                           ▼
-                    CONTEXT ML FLOW
-                           │
-                     raw NER entities
-               PERSON / CITY / COUNTRY /
-               REGION / STREET / HOUSE ...
-                           │
-                           ▼
-                   business-role mapping
-          PERSON / PLACE_OF_BIRTH / CITIZENSHIP /
-             ADDRESS / CARDHOLDER_NAME
-                           │
-          PASSPORT_ISSUER: explicit temporary
-          rules fallback because current RuBERT
-          model has no ORG output head
-                           │
-             ┌─────────────┴─────────────┐
-             │                           │
-             ▼                           ▼
-       all confirmed                no target role
-         candidates                     DROP
-             │
-             ▼
-        STRUCTURAL LAYER
-             │
-      atomic or composite?
-             │
-       ┌─────┴───────────┐
-       │                 │
-       ▼                 ▼
-    atomic           composite
-    as-is       split semantic parts
-                     │
-                     ▼
-                 eligibility
-                     │
-                     ▼
-              overlap resolver
-                     │
-                     ▼
-                    MASK
-```
+~~~mermaid
+flowchart TD
+    A[Input text] --> B1[FORMAT flow]
+    A --> B2[FORMAT + CONTEXT flow]
+    A --> B3[CONTEXT ML flow]
 
----
+    B1 --> C[Confirmed PII findings]
+    B2 --> C
+    B3 --> C
 
-## 3. Flow A — context-defined
+    C --> D[Shared structural layer]
+    D --> E[Policy / eligibility]
+    E --> F[Overlap resolver]
+    F --> G[Mask]
+    G --> H[Encrypted state]
+    H --> I[Result]
+~~~
 
-```text
-TEXT
-  │
-  ▼
-Raw ML NER
-  │
-  ├─ PERSON-like
-  ├─ location/address-like
-  └─ other raw labels
-  │
-  ▼
-Business role mapper
-  │
-  ├─ PERSON + personal/client context → PERSON
-  ├─ location + birth context → PLACE_OF_BIRTH
-  ├─ COUNTRY + citizenship context → CITIZENSHIP
-  ├─ location hierarchy → ADDRESS
-  ├─ PERSON + cardholder context → CARDHOLDER_NAME
-  └─ no required role → DROP
-  │
-  ▼
-Structural layer
-```
+The three detection flows answer what PII object has been confirmed.
+The structural layer answers which semantic parts of that object are masked.
 
-**Model limitation:** selected `redmadrobot-rnd/rubert-base-pii-ner` has person, location/address, contacts and document-number labels, but no generic ORG head. Therefore `PASSPORT_ISSUER` remains one isolated fallback detector until the ML adapter is extended/replaced with ORG-capable NER.
+## 3. Flow A — format-defined
 
-The model is not loaded into every API worker. It runs in a dedicated `ner` service and returns raw entities over the internal network.
+Types: EMAIL, PHONE, INN, PAYMENT_CARD.
 
----
+~~~mermaid
+flowchart TD
+    A[Text] --> B[Find format candidate]
+    B --> C{Format valid?}
+    C -- No --> X[Drop]
+    C -- Yes --> D{Explicit exclusion?}
+    D -- Yes --> X
+    D -- No --> E[Confirmed PII]
+~~~
+
+| Type | Candidate | Validation | Explicit exclusions |
+|---|---|---|---|
+| EMAIL | email syntax | malformed leftovers | service/local roles |
+| PHONE | RU / international patterns | RU normalization / length | public-service phone / negative role |
+| INN | 12 digits | INN checksum | explicit non-personal role |
+| PAYMENT_CARD | 13–19 digits | Luhn; guarded fallback | order/operation/etc. roles |
+
+Rule: a positive business label is not required for this group. Format is primary evidence.
 
 ## 4. Flow B — format + context
 
-```text
-TEXT
-  │
-  ▼
-Find format candidate
-  │
-  ├─ invalid → DROP
-  └─ valid
-       │
-       ▼
-  target context?
-       │
-       ├─ no → DROP
-       └─ yes
-            │
-            ▼
-       confirmed type
-            │
-            ▼
-       structural layer
-```
+Types: BIRTH_DATE, PASSPORT, SUBDIVISION_CODE, PASSPORT_ISSUE_DATE, DRIVER_LICENSE, CVV, PIN.
 
-Each type owns only:
-- candidate format;
-- contextual confirmation.
+~~~mermaid
+flowchart TD
+    A[Text] --> B[Find format candidate]
+    B --> C{Format valid?}
+    C -- No --> X[Drop]
+    C -- Yes --> D[Context / role classifier]
+    D --> E{Target role confirmed?}
+    E -- No --> X
+    E -- Yes --> F[Confirmed PII]
+~~~
 
-It must not own structural decomposition.
+| Type | Format candidate | Context confirmation |
+|---|---|---|
+| BIRTH_DATE | numeric/text date | birth role |
+| PASSPORT | 10-digit passport shapes | passport anchor |
+| SUBDIVISION_CODE | XXX-XXX | subdivision role |
+| PASSPORT_ISSUE_DATE | numeric/text date | passport-issue role |
+| DRIVER_LICENSE | 10-digit VU shapes | VU anchor |
+| CVV | 3–4 digits | CVV/CVC/security-code role |
+| PIN | 4–6 digits | card PIN role |
 
----
+Candidate detection and role confirmation are logically separate even when a legacy regex currently performs both operations in one function.
 
-## 5. Flow C — format-defined
+## 5. Flow C — context-defined / ML-first
 
-```text
-TEXT
-  │
-  ▼
-Find format candidate
-  │
-  ▼
-Validate format/checksum
-  │
-  ├─ invalid → DROP
-  └─ valid
-       │
-       ▼
-explicit service/non-PII exclusion?
-       │
-       ├─ yes → DROP
-       └─ no → confirmed type
-                    │
-                    ▼
-              structural layer
-```
+Types: PERSON, PLACE_OF_BIRTH, CITIZENSHIP, PASSPORT_ISSUER, ADDRESS, CARDHOLDER_NAME.
 
-Positive semantic context is not required for these four types. Explicit hard-negative/service rules may exclude a valid-looking value.
+~~~mermaid
+flowchart TD
+    A[Text] --> B[NER / ML entity extraction]
+    B --> C[Raw semantic entity]
+    C --> D[Context role mapping]
+    D --> E{PII business role?}
+    E -- No --> X[Drop]
+    E -- Yes --> F[Canonical PII type]
+~~~
 
----
+The ML layer is two-stage:
 
-## 6. Structural layer
+1. NER detects a generic semantic entity: PERSON / CITY / STREET / ORG / COUNTRY / etc.
+2. Context-role mapping turns that entity into one of the six business PII types.
 
-Structure is no longer detector-owned.
+Examples:
 
-```text
-confirmed PII
-    │
-    ▼
-catalog[type].structure
-    │
-    ├─ ATOMIC → keep one semantic span
-    │
-    └─ COMPOSITE
-          │
-          ├─ PERSON → first / middle / last
-          ├─ ADDRESS → region/city/street/house/building/flat/index
-          ├─ CARDHOLDER_NAME → first / last / middle
-          ├─ PASSPORT → series / number
-          └─ DRIVER_LICENSE → series / number
-    │
-    ▼
-eligibility + overlap resolver
-```
+    PERSON + "имя держателя карты" -> CARDHOLDER_NAME
+    PERSON + customer/self claim    -> PERSON
+    CITY + "место рождения"        -> PLACE_OF_BIRTH
+    COUNTRY + "гражданство"        -> CITIZENSHIP
+    ORG + "паспорт выдан"          -> PASSPORT_ISSUER
+    CITY/STREET/HOUSE + address role -> ADDRESS
 
-Legacy public detector functions retain structured output for backwards compatibility, but the production v2 flows call structure-agnostic candidate detectors and then one shared `normalize_structures()`.
+Important contract: when ML is enabled for a request, an empty ML result is authoritative. The pipeline does not silently replace it with legacy context rules.
 
----
+Migration mode exists only when context ML is disabled: old labelled rules act as compatibility fallback.
 
-## 7. Runtime topology
+## 6. Shared structural layer
 
-```text
-                    ┌──────────────┐
-request ───────────►│ proxy/API x4 │
-                    └──────┬───────┘
-                           │
-        ┌──────────────────┼─────────────────┐
-        │                  │                 │
-        ▼                  ▼                 ▼
- format rules       format-context      context ML
-                                              │
-                                              ▼
-                                      ┌──────────────┐
-                                      │ NER service  │
-                                      │ 1 model copy │
-                                      └──────┬───────┘
-                                             │ raw entities
-                                             ▼
-                                      role mapping
-        └──────────────────┬──────────────────┘
-                           ▼
-                    structural layer
-                           ▼
-                        resolver
-                           ▼
-                         mask
-                           ▼
-                         Redis
-```
+~~~mermaid
+flowchart TD
+    A[Confirmed PII] --> B{Structure}
+    B -- Atomic --> C[Keep one semantic span]
+    B -- Composite --> D[Structural parser]
+    D --> E[Semantic component spans]
+    C --> F[Resolver]
+    E --> F
+    F --> G[Mask]
+~~~
 
-The NER service is a separate image (`Dockerfile.ner`) so 4 API workers do not each load a full transformer model.
+| Type | Components |
+|---|---|
+| PERSON | first / middle / last |
+| ADDRESS | city / street / house / building / flat / index |
+| CARDHOLDER_NAME | first / last |
+| PASSPORT | series / number |
+| DRIVER_LICENSE | series / number |
 
----
+Detector functions return a confirmed object span. Composite splitting lives in app/pii/structural.py rather than inside the group-specific identification decision.
 
-## 8. Status
+## 7. Code map
 
-Implemented:
-- canonical 17-type catalog;
-- three explicit flows;
-- raw NER interface;
-- ML raw-entity → business-role mapping;
-- shared structural layer;
-- dedicated NER service;
-- `/process` mapped to the autotest ML profile;
-- compatibility wrappers for old detector/unit-test APIs.
+| Responsibility | File |
+|---|---|
+| canonical 17-type catalog | app/pii/catalog.py |
+| three detection flows | app/pii/flows.py |
+| raw NER → business role | app/pii/context_ml.py |
+| ML / NER adapter | app/pii/ner.py |
+| shared structural layer | app/pii/structural.py |
+| eligibility + overlap resolver | app/pii/detect.py |
+| rule implementations | app/pii/rules.py, app/pii/ids/* |
+| system routing | app/process.py, config.yaml |
+| evaluator endpoint | app/api.py |
 
-Not yet accepted as scoring baseline:
-- external evaluator score;
-- latency/RPS with context ML active;
-- final decision on ORG-capable model for `PASSPORT_ISSUER`.
+## 8. Runtime routing
 
-Next step after architecture validation:
-1. deploy architecture-v2;
-2. measure correctness + RPS/latency;
-3. only then start one-entity/one-node experiments inside the new architecture.
+System config decides whether it wants context ML:
+
+- autotest: use_context_ml = true
+- demo: true
+- format_only: false
+- high_rps: false
+
+A deployment master switch must also be enabled:
+
+    CONTEXT_ML_ENABLED=1
+
+Legacy NER_ENABLED remains a compatibility alias.
+
+Routing:
+
+    context type needed?
+      no -> no ML
+      yes
+        -> master switch enabled?
+            no -> compatibility rules
+            yes
+              -> system use_context_ml?
+                  false -> compatibility rules
+                  true -> authoritative ML context flow
+
+## 9. Current deployment boundary
+
+The default slim Docker image historically installs only requirements.txt.
+Local RuBERT dependencies live in requirements-ner.txt.
+
+Architecture v2 therefore supports two deployment modes:
+
+- remote NER_URL via httpx;
+- optional local ML runtime with requirements-ner.txt and model weights.
+
+Do not claim that local ML is active unless the deployment includes the model and CONTEXT_ML_ENABLED=1.
+
+## 10. Experiment discipline
+
+After v2:
+
+one experiment = one entity × one decision node in its flow or structural layer.
+
+Examples:
+
+- BIRTH_DATE × context-role node
+- PAYMENT_CARD × format validator
+- ADDRESS × structural parser
+- PERSON × context-role mapping
+
+Never change two entity types or two decision nodes in one scorer experiment.
