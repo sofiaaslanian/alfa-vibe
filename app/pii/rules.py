@@ -1386,7 +1386,7 @@ def _add_role_persons(text: str, out: list[Finding], covered: set[tuple[int, int
 def _add_called_persons(text: str, out: list[Finding], covered: set[tuple[int, int]]) -> None:
     for match in PERSON_CALLED_RE.finditer(text):
         cue = match.group(0)[: match.start(1) - match.start()]
-        from_ya = bool(re.search(r"(?i)(?<![А-Яа-яЁёA-Za-z0-9])я\s*[:\-—–]?\s*$", cue))
+        from_ya = bool(re.search(r"(?i)(?<![А-ЯЁA-Z0-9])я\s*[:\-—–]?\s*$", cue))
         _add_person_candidate(
             text,
             out,
