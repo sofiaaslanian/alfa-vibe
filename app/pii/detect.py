@@ -212,6 +212,13 @@ def _accept_candidate(accepted: list[Finding], candidate: Finding) -> list[Findi
         if candidate.start <= hit.start and hit.end <= candidate.end
     ]
     if contained and len(contained) == len(hits):
+        # Candidates are processed by descending type priority. A wider,
+        # lower-priority entity must not swallow an already accepted,
+        # higher-priority semantic entity (e.g. PERSON around CITIZENSHIP).
+        candidate_priority = PRIORITY.get(candidate.type, 0)
+        strongest_hit = max(PRIORITY.get(hit.type, 0) for hit in contained)
+        if candidate_priority < strongest_hit:
+            return accepted
         kept = [finding for finding in accepted if finding not in contained]
         return [*kept, candidate]
 
