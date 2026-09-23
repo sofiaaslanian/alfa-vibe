@@ -36,6 +36,15 @@ _ADDR_STREET_RE = re.compile(
     rf")"
 )
 _ADDR_HOUSE_RE = re.compile(r"(?i)((?:д\.|дом)\s*\d+[А-ЯA-Z]?)")
+# Spoken / natural address: "на улице Ленина 5", "Невский проспект 20".
+# The address role has already been validated upstream; here we only extract
+# the semantic house value, not the street label.
+_ADDR_BARE_HOUSE_RE = re.compile(
+    rf"(?i)(?:"
+    rf"{_ADDR_STREET_TYPE}\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
+    rf"|[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+{_ADDR_STREET_TYPE}"
+    rf")\s+(\d+[А-ЯA-Z]?)"
+)
 _ADDR_FLAT_RE = re.compile(r"(?i)((?:кв\.|квартира)\s*\d+)")
 _ADDR_CORP_RE = re.compile(r"(?i)((?:корп\.|корпус|стр\.|строен\w*)\s*\d+[А-ЯA-Z]?)")
 
@@ -215,6 +224,25 @@ def _collect_address_parts(
                 decision=decision,
                 reason=reason,
             )
+
+    # If the house is written without "д./дом", extract it only after
+    # a recognized street component. This handles natural speech without
+    # turning arbitrary trailing numbers into address parts.
+    if not any(f.part == "house" for f in found):
+        for match in _ADDR_BARE_HOUSE_RE.finditer(chunk):
+            _append_address_part(
+                found,
+                covered,
+                start=start,
+                rel_start=match.start(1),
+                rel_end=match.end(1),
+                part="house",
+                score=score,
+                detector=detector,
+                decision=decision,
+                reason=reason,
+            )
+            break
 
     for match in _ADDR_CITY_RE.finditer(chunk):
         before = len(found)
