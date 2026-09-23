@@ -33,10 +33,10 @@ class FormatContextFlow:
     def detect(text: str) -> FlowResult:
         from app.pii.rules import (
             detect_birth_date,
-            detect_passport,
+            _detect_passport_candidate,
             detect_subdivision,
             detect_passport_issue_date,
-            detect_driver_license,
+            _detect_driver_license_candidate,
             detect_cvv,
             detect_pin,
             detect_snils,
@@ -47,10 +47,10 @@ class FormatContextFlow:
         findings: list[Finding] = []
         for detector in (
             detect_birth_date,
-            detect_passport,
+            _detect_passport_candidate,
             detect_subdivision,
             detect_passport_issue_date,
-            detect_driver_license,
+            _detect_driver_license_candidate,
             detect_cvv,
             detect_pin,
             # Extensions outside the canonical 17-type catalog.
@@ -74,24 +74,24 @@ class ContextFlow:
     @staticmethod
     def _rule_candidates(text: str) -> list[Finding]:
         from app.pii.rules import (
-            detect_address,
+            _detect_address_candidate,
             detect_place_of_birth,
             detect_citizenship,
             detect_passport_issuer,
-            detect_cardholder_name,
-            detect_person_labelled,
-            detect_person_patronymic,
+            _detect_cardholder_name_candidate,
+            _detect_person_labelled_candidate,
+            _detect_person_patronymic_candidate,
         )
 
         findings: list[Finding] = []
         for detector in (
-            detect_address,
+            _detect_address_candidate,
             detect_place_of_birth,
             detect_citizenship,
             detect_passport_issuer,
-            detect_cardholder_name,
-            detect_person_labelled,
-            detect_person_patronymic,
+            _detect_cardholder_name_candidate,
+            _detect_person_labelled_candidate,
+            _detect_person_patronymic_candidate,
         ):
             findings.extend(detector(text))
         return findings
