@@ -664,6 +664,8 @@ PASSPORT_NEG = [
     RX_FORMAT,
     r"инструкц",
     r"шаблон",
+    # Driver-license context: «серия … номер …» belongs to the ВУ, not a passport.
+    r"водительск",
 ]
 
 
