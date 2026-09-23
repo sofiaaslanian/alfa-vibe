@@ -66,42 +66,69 @@ def validate_card_digits(digits: str) -> bool:
     return checksums.luhn(digits)
 
 
+def _blocked_card_context(left_ctx: str, full_ctx: str) -> bool:
+    return neg_wins(left_ctx, CARD_NEG_ROLES, CARD_POS_HINTS) or neg_wins(
+        full_ctx,
+        CARD_NEG_ROLES,
+        CARD_POS_HINTS,
+    )
+
+
+def _card_score_and_detector(
+    text: str,
+    start: int,
+    end: int,
+    digits: str,
+    left_ctx: str,
+    full_ctx: str,
+) -> tuple[float, str] | None:
+    keyword_ok = bool(CARD_KEYWORD_GATE_RE.search(left_ctx))
+    if not validate_card_digits(digits):
+        if not (keyword_ok and checksums.looks_like_card_pan(digits)):
+            return None
+        return 0.9, "card_rule_no_luhn_v1"
+
+    score = 0.97
+    if has_any(full_ctx, CARD_POS_HINTS) or keyword_ok:
+        score = 0.995
+    elif re.search(CARD_SEP, text[start:end]):
+        score = 0.98
+    return score, "card_rule_v2"
+
+
+def _card_finding(text: str, match) -> Finding | None:
+    parsed = _card_digit_span(text, match.start(), match.end())
+    if not parsed:
+        return None
+    start, end, digits = parsed
+    left_ctx = left(text, start)
+    full_ctx = window(text, start, end)
+    if _blocked_card_context(left_ctx, full_ctx):
+        return None
+    scored = _card_score_and_detector(
+        text,
+        start,
+        end,
+        digits,
+        left_ctx,
+        full_ctx,
+    )
+    if not scored:
+        return None
+    score, detector = scored
+    return Finding("PAYMENT_CARD", start, end, score, detector)
+
+
 def detect_card(text: str) -> list[Finding]:
     out: list[Finding] = []
     seen: set[tuple[int, int]] = set()
     for match in CARD_RE.finditer(text):
-        parsed = _card_digit_span(text, match.start(), match.end())
-        if not parsed:
+        finding = _card_finding(text, match)
+        if not finding:
             continue
-        start, end, digits = parsed
-        span = (start, end)
+        span = (finding.start, finding.end)
         if span in seen:
             continue
-
-        left_ctx = left(text, start)
-        full_ctx = window(text, start, end)
-        if neg_wins(left_ctx, CARD_NEG_ROLES, CARD_POS_HINTS) or neg_wins(
-            full_ctx,
-            CARD_NEG_ROLES,
-            CARD_POS_HINTS,
-        ):
-            continue
-
-        luhn_ok = validate_card_digits(digits)
-        keyword_ok = bool(CARD_KEYWORD_GATE_RE.search(left_ctx))
-        if not luhn_ok:
-            if not (keyword_ok and checksums.looks_like_card_pan(digits)):
-                continue
-            score = 0.9
-            detector = "card_rule_no_luhn_v1"
-        else:
-            score = 0.97
-            if has_any(full_ctx, CARD_POS_HINTS) or keyword_ok:
-                score = 0.995
-            elif re.search(CARD_SEP, text[start:end]):
-                score = 0.98
-            detector = "card_rule_v2"
-
         seen.add(span)
-        out.append(Finding("PAYMENT_CARD", start, end, score, detector))
+        out.append(finding)
     return out
