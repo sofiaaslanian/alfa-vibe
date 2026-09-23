@@ -376,7 +376,7 @@ def detect_pii(
 
     ner = get_ner()
     use_ner = ner.enabled if enable_ner is None else enable_ner
-    context_ml_findings: list[Finding] = []
+    context_ml_findings: list[Finding] | None = None
 
     if use_ner:
         fail_closed = (
