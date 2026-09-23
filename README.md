@@ -8,7 +8,7 @@
 - Контур (скринкаст): http://localhost:8080/
 - Доказательства: http://localhost:8080/evidence
 
-`X-API-Key` по умолчанию `demo-key` (см. `.env`). Чекбокс «Без LLM» — безопасный прогон без AlfaGen.
+Для демо задайте `PROXY_API_KEYS` в `.env`, затем введите ключ в настройках интерфейса. Без настроенного ключа `/proxy/chat` и `/demo/run` возвращают 401. Чекбокс «Без LLM» — прогон без AlfaGen.
 
 ## Быстрый старт
 
@@ -16,21 +16,19 @@
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt          # API + load (без torch)
 # pip install -r requirements-ner.txt    # опционально RuBERT FIO
-cp .env.example .env                     # прописать ключи / STATE_*
+cp .env.example .env                     # задать уникальные PROXY_API_KEYS / STATE_*
 uvicorn app.main:app --port 8080 --reload
 ```
 
-Docker-образ **без** torch (лёгкий). NER на RU только если отдельно поставите `requirements-ner.txt` и `NER_ENABLED=1`.
+Основной Docker-образ **без** torch; Compose отдельно собирает сервис NER.
 
 ```bash
 # mask
 curl -s localhost:8080/process -H 'Content-Type: application/json' \
-  -H 'X-API-Key: demo-key' \
   -d '{"payload":"Клиент ivanov@mail.ru","payload_id":"t1"}'
 
 # demask (тот же payload_id + masked строка)
 curl -s localhost:8080/process -H 'Content-Type: application/json' \
-  -H 'X-API-Key: demo-key' \
   -d '{"payload":"<masked>","payload_id":"t1"}'
 ```
 
@@ -56,12 +54,12 @@ Redis в Compose **не** публикует `6379` наружу (только �
 
 ## Demo proxy → AlfaGen
 
-Заголовок `X-API-Key` (см. `PROXY_API_KEYS`), система `X-System` из `config.yaml`.
+Заголовок `X-API-Key` (см. `PROXY_API_KEYS`), система `X-System` из `config.yaml`. Для примера ниже задайте `PROXY_API_KEY` тем же значением, которое указали для сервиса.
 
 ```bash
 curl -s localhost:8080/proxy/chat \
   -H 'Content-Type: application/json' \
-  -H 'X-API-Key: demo-key' \
+  -H "X-API-Key: $PROXY_API_KEY" \
   -H 'X-System: demo' \
   -H 'X-Consumer-Id: demo' \
   -d '{"text":"Напиши письмо клиенту Ивану Петрову на ivan@mail.ru"}'

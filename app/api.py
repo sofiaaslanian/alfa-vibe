@@ -122,8 +122,6 @@ def _check_system(cfg: Config, system: str, *, required: bool = False) -> str:
 
 def _api_key_ok(x_api_key: str | None) -> bool:
     expected = os.getenv("PROXY_API_KEYS", "")
-    if not expected:
-        return True
     allowed = {k.strip() for k in expected.split(",") if k.strip()}
     return bool(x_api_key and x_api_key in allowed)
 
@@ -181,9 +179,15 @@ async def process(
     mode = "unknown"
     status = "200"
     try:
-        live = svc.store.get_live("autotest", body.payload_id)
-        mode = "mask" if live is None else "retry_or_demask"
-        result = svc.process(body.payload, body.payload_id, effective_system)
+        # Redis and the detectors are synchronous. Keep them off the event loop
+        # so concurrent requests can reach the admission semaphore.
+        def run_process() -> tuple[str, str]:
+            live = svc.store.get_live("autotest", body.payload_id)
+            request_mode = "mask" if live is None else "retry_or_demask"
+            result = svc.process(body.payload, body.payload_id, effective_system)
+            return result, request_mode
+
+        result, mode = await asyncio.to_thread(run_process)
         return ProcessResponse(result=result)
     except ProcessError as exc:
         status = str(exc.status)
@@ -404,7 +408,7 @@ async def demo_config(request: Request):
         "default_pd_types": cfg.default_pd_types,
         "storage": os.getenv("STORAGE_BACKEND", "memory"),
         "ner_enabled": os.getenv("NER_ENABLED", "0") == "1",
-        "proxy_key_required": bool(os.getenv("PROXY_API_KEYS", "").strip()),
+        "proxy_key_required": True,
     }
 
 

@@ -1,6 +1,6 @@
 /* Shared helpers for Contour + Evidence */
 export function apiKey() {
-  return localStorage.getItem("alfa_proxy_key") || "demo-key";
+  return localStorage.getItem("alfa_proxy_key") || "";
 }
 
 export function headers(system) {
