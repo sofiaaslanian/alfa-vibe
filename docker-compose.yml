@@ -53,8 +53,8 @@ services:
       STORAGE_BACKEND: redis
       REDIS_URL: redis://redis:6379/0
       # Context ML runs in the dedicated NER service; proxy stays slim.
-      CONTEXT_ML_ENABLED: "${CONTEXT_ML_ENABLED:-0}"
-      NER_ENABLED: "${CONTEXT_ML_ENABLED:-0}"
+      CONTEXT_ML_ENABLED: "${CONTEXT_ML_ENABLED:-1}"
+      NER_ENABLED: "${CONTEXT_ML_ENABLED:-1}"
       NER_URL: "http://ner:8090"
       NER_LOCAL: "0"
       NER_FAIL_CLOSED: "0"
