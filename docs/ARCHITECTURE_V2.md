@@ -189,8 +189,9 @@ System config decides whether it wants context ML:
 A deployment master switch must also be enabled:
 
     CONTEXT_ML_ENABLED=1
+    CONTEXT_ML_FAIL_CLOSED=1
 
-Legacy NER_ENABLED remains a compatibility alias.
+Legacy NER_ENABLED / NER_FAIL_CLOSED remain compatibility aliases.
 
 Routing:
 
@@ -204,6 +205,8 @@ Routing:
                   false -> compatibility rules
                   true -> authoritative ML context flow
 
+If required context ML raises an error in the target profile, the request fails closed. It does not silently switch to rules. An explicit fail-open mode exists only as a compatibility option.
+
 ## 9. Current deployment boundary
 
 The default slim Docker image historically installs only requirements.txt.
@@ -211,10 +214,10 @@ Local RuBERT dependencies live in requirements-ner.txt.
 
 Architecture v2 therefore supports two deployment modes:
 
-- remote NER_URL via httpx;
-- optional local ML runtime with requirements-ner.txt and model weights.
+- the default docker-compose target: a dedicated NER sidecar built from Dockerfile.ner, with the API calling it through NER_URL;
+- an optional external/remote NER_URL with the same raw-entity contract.
 
-Do not claim that local ML is active unless the deployment includes the model and CONTEXT_ML_ENABLED=1.
+The sidecar loads the model before it becomes healthy, while the API image stays slim. Context ML is active only when the sidecar/external endpoint is available and CONTEXT_ML_ENABLED=1.
 
 ## 10. Experiment discipline
 
