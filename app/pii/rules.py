@@ -391,7 +391,7 @@ ADDRESS_NEG = [
 ]
 
 
-def detect_address(text: str) -> list[Finding]:
+def _detect_address_candidate(text: str) -> list[Finding]:
     out: list[Finding] = []
     seen: set[tuple[int, int]] = set()
     for regex in (ADDRESS_RE, SHORT_ADDRESS_RE, SPOKEN_ADDRESS_RE):
@@ -437,6 +437,13 @@ def detect_address(text: str) -> list[Finding]:
         )
     ]
     return out
+
+
+def detect_address(text: str) -> list[Finding]:
+    """Compatibility API; production pipeline structures centrally."""
+    from app.pii.structural import normalize_structures
+
+    return normalize_structures(text, _detect_address_candidate(text))
 
 
 # --- dates ---
@@ -574,7 +581,7 @@ PASSPORT_NEG = [
 ]
 
 
-def detect_passport(text: str) -> list[Finding]:
+def _detect_passport_candidate(text: str) -> list[Finding]:
     """Confirm one passport object; structural layer splits series/number."""
     out: list[Finding] = []
     covered: set[tuple[int, int]] = set()
@@ -621,6 +628,13 @@ def detect_passport(text: str) -> list[Finding]:
     return out
 
 
+def detect_passport(text: str) -> list[Finding]:
+    """Compatibility API; production pipeline structures centrally."""
+    from app.pii.structural import normalize_structures
+
+    return normalize_structures(text, _detect_passport_candidate(text))
+
+
 # --- subdivision ---
 SUB_RE = re.compile(r"(?<!\d)\d{3}-\d{3}(?!\d)")
 SUB_LABELS = {
@@ -649,7 +663,7 @@ VU_POS = [r"водительск", r"\bву\b", r"в\s*/\s*у", r"удостов
 VU_NEG = [r"заявк", r"номер\s+заказ", r"накладн", r"паспорт", r"пример", r"формат"]
 
 
-def detect_driver_license(text: str) -> list[Finding]:
+def _detect_driver_license_candidate(text: str) -> list[Finding]:
     """Confirm one driver-license object; structural layer splits series/number."""
     out: list[Finding] = []
     covered: set[tuple[int, int]] = set()
@@ -675,6 +689,13 @@ def detect_driver_license(text: str) -> list[Finding]:
             Finding("DRIVER_LICENSE", m.start(1), m.end(1), 0.95, "driver_license_rule_v1")
         )
     return out
+
+
+def detect_driver_license(text: str) -> list[Finding]:
+    """Compatibility API; production pipeline structures centrally."""
+    from app.pii.structural import normalize_structures
+
+    return normalize_structures(text, _detect_driver_license_candidate(text))
 
 
 # --- cvv / pin ---
@@ -1010,7 +1031,7 @@ CARDHOLDER_NEG = [
 ]
 
 
-def detect_cardholder_name(text: str) -> list[Finding]:
+def _detect_cardholder_name_candidate(text: str) -> list[Finding]:
     out: list[Finding] = []
     for m in CARDHOLDER_LABEL_RE.finditer(text):
         left = _left(text, m.start(), ROLE_WINDOW)
@@ -1027,6 +1048,13 @@ def detect_cardholder_name(text: str) -> list[Finding]:
             continue
         out.append(Finding("CARDHOLDER_NAME", span[0], span[1], 0.94, "cardholder_rule_v2"))
     return out
+
+
+def detect_cardholder_name(text: str) -> list[Finding]:
+    """Compatibility API; production pipeline structures centrally."""
+    from app.pii.structural import normalize_structures
+
+    return normalize_structures(text, _detect_cardholder_name_candidate(text))
 
 
 # --- person (ФИО) ---
@@ -1204,7 +1232,7 @@ def _ya_stopword_span(text: str, start: int, end: int) -> bool:
     return first in _YA_NAME_STOP
 
 
-def detect_person_labelled(text: str) -> list[Finding]:
+def _detect_person_labelled_candidate(text: str) -> list[Finding]:
     out: list[Finding] = []
     covered: set[tuple[int, int]] = set()
 
@@ -1260,6 +1288,13 @@ def detect_person_labelled(text: str) -> list[Finding]:
     return out
 
 
+def detect_person_labelled(text: str) -> list[Finding]:
+    """Compatibility API; production pipeline structures centrally."""
+    from app.pii.structural import normalize_structures
+
+    return normalize_structures(text, _detect_person_labelled_candidate(text))
+
+
 # Cloud.ru pii.fio-ru idea: patronymic suffix as precision anchor.
 # ONLY emits candidates — discourse gate decides personal vs third-party.
 _PATRONYMIC = r"(?:ич(?:а|у|ем|е)?|вн(?:а|ы|е|у|ой)|ичн(?:а|ы|е|у|ой))"
@@ -1273,7 +1308,7 @@ PERSON_PATRONYMIC_RE = re.compile(
 )
 
 
-def detect_person_patronymic(text: str) -> list[Finding]:
+def _detect_person_patronymic_candidate(text: str) -> list[Finding]:
     """FIO with -ич/-вна patronymic. Discourse filter_findings still applies."""
     out: list[Finding] = []
     for m in PERSON_PATRONYMIC_RE.finditer(text):
@@ -1291,6 +1326,13 @@ def detect_person_patronymic(text: str) -> list[Finding]:
             continue
         out.append(Finding("PERSON", span[0], span[1], 0.88, "person_patronymic_v1"))
     return out
+
+
+def detect_person_patronymic(text: str) -> list[Finding]:
+    """Compatibility API; production pipeline structures centrally."""
+    from app.pii.structural import normalize_structures
+
+    return normalize_structures(text, _detect_person_patronymic_candidate(text))
 
 
 RULE_DETECTORS = [
