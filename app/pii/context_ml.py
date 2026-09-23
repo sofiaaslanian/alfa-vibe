@@ -14,8 +14,9 @@ from app.pii.detect import Finding
 
 
 _NAME_LABELS = {"FIRST_NAME", "LAST_NAME", "MIDDLE_NAME", "PER", "PERSON"}
-_LOCATION_LABELS = {"COUNTRY", "REGION", "DISTRICT", "CITY"}
-_ADDRESS_LABELS = {"ADDRESS", "REGION", "DISTRICT", "CITY", "STREET", "HOUSE"}
+_LOCATION_LABELS = {"COUNTRY", "REGION", "DISTRICT", "CITY", "LOC", "LOCATION"}
+_ADDRESS_LABELS = {"ADDRESS", "REGION", "DISTRICT", "CITY", "STREET", "HOUSE", "LOC", "LOCATION"}
+_ORG_LABELS = {"ORG", "ORGANIZATION"}
 
 _BIRTH_ROLE_RE = re.compile(
     r"(?i)(?:место\s+рожден|родил(?:ся|ась)|place\s+of\s+birth|birth\s*place)"
@@ -26,6 +27,10 @@ _CITIZEN_ROLE_RE = re.compile(
 _CARDHOLDER_ROLE_RE = re.compile(
     r"(?i)(?:имя\s+держателя\s+карты|держател\w*\s+карты|имя\s+на\s+карт|"
     r"embossed\s+name|name\s+on\s+card|cardholder(?:\s+name)?)"
+)
+_ISSUER_ROLE_RE = re.compile(
+    r"(?i)(?:кем\s+выдан\s+паспорт|паспорт\s+выдан|"
+    r"орган(?:ом)?\s+выдач\w*(?:\s+паспорт\w*)?|выдавш\w*\s+орган)"
 )
 
 
@@ -82,6 +87,9 @@ def raw_entities_to_context_findings(
             continue
         start, end = span
         score = _score(entity)
+        if label in _NAME_LABELS:
+            from app.pii.ner import expand_span_to_word
+            start, end = expand_span_to_word(text, start, end)
         ctx = _ctx(text, start, end)
 
         # Generic PERSON candidate.
@@ -112,9 +120,13 @@ def raw_entities_to_context_findings(
         if label in _LOCATION_LABELS and _BIRTH_ROLE_RE.search(ctx):
             add("PLACE_OF_BIRTH", start, end, score)
 
-        # Business role: citizenship. COUNTRY is the strongest supported NER
-        # signal for this role; other locations are deliberately excluded.
-        if label == "COUNTRY" and _CITIZEN_ROLE_RE.search(ctx):
+        # Business role: citizenship. COUNTRY is strongest; LOC/LOCATION are
+        # accepted only with an explicit citizenship cue.
+        if label in {"COUNTRY", "LOC", "LOCATION"} and _CITIZEN_ROLE_RE.search(ctx):
             add("CITIZENSHIP", start, end, score)
+
+        # Business role: organisation that issued the passport.
+        if label in _ORG_LABELS and _ISSUER_ROLE_RE.search(ctx):
+            add("PASSPORT_ISSUER", start, end, score)
 
     return out
