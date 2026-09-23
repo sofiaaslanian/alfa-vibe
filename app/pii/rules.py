@@ -539,43 +539,8 @@ def detect_birth_date(text: str) -> list[Finding]:
     return _detect_role_dates(text, "birth", "BIRTH_DATE", "birth_date_rule_v1")
 
 
-def detect_passport_issue_date(text: str) -> list[Finding]:
-    return _detect_role_dates(text, "issue", "PASSPORT_ISSUE_DATE", "passport_issue_date_rule_v1")
-
-
-# --- passport ---
-# Cloud.ru idea: keyword + up to 3 filler words before digits; mask digit span only.
-PASSPORT_SPLIT_RE = re.compile(
-    r"серия\s+(\d{2}\s?\d{2})\s*,?\s*номер\s+(\d{6})",
-    re.IGNORECASE,
-)
-PASSPORT_ANCHORED_RE = re.compile(
-    r"(?i)(?:паспорт[а-яё]*|пасп\.?|серия)"
-    r"(?:[\s,.:;!?()«»\"'\-]+[а-яё]+){0,3}"
-    r"[\s,.:;!?()«»\"'№\-]*"
-    r"(\d{2}[\s\-]?\d{2})"
-    r"[\s\-]*(?:(?:№|номер)[\s№:.\-]*)?"
-    r"(\d{6})"
-    r"(?:\D|$)"
-)
-PASSPORT_COMBINED_RE = re.compile(
-    r"(?<!\d)(\d{2}\s\d{2}\s\d{6}|\d{4}\s?\d{6}|\d{10})(?!\d)"
-)
-PASSPORT_POS = [r"паспорт", r"пасп\."]
-PASSPORT_NEG = [
-    r"номер\s+заказ",
-    r"заявк",
-    r"номер\s+договор",
-    r"артикул",
-    r"накладн",
-    r"пример",
-    r"формат",
-    r"инструкц",
-    r"шаблон",
-]
-
-
 def detect_passport(text: str) -> list[Finding]:
+    """Confirm one passport object; structural layer splits series/number."""
     out: list[Finding] = []
     covered: set[tuple[int, int]] = set()
 
@@ -585,21 +550,12 @@ def detect_passport(text: str) -> list[Finding]:
             continue
         if _has_any(_left(text, m.start(), 50), PASSPORT_NEG):
             continue
-        # Two digit spans — do NOT include «номер» (org: service words = excess).
-        s1, e1 = m.start(1), m.end(1)
-        s2, e2 = m.start(2), m.end(2)
-        out.append(Finding("PASSPORT", s1, e1, 0.96, "passport_rule_v1", part="series"))
-        out.append(Finding("PASSPORT", s2, e2, 0.96, "passport_rule_v1", part="number"))
-        covered.add((s1, e1))
-        covered.add((s2, e2))
+        s1, e2 = m.start(1), m.end(2)
+        out.append(Finding("PASSPORT", s1, e2, 0.96, "passport_rule_v1"))
         covered.add((m.start(), m.end()))
 
     for m in PASSPORT_ANCHORED_RE.finditer(text):
-        s1, e1 = m.start(1), m.end(1)
-        s2, e2 = m.start(2), m.end(2)
-        if any(not (e1 <= a or s1 >= b) for a, b in covered):
-            continue
-        if any(not (e2 <= a or s2 >= b) for a, b in covered):
+        if any(not (m.end() <= a or m.start() >= b) for a, b in covered):
             continue
         left = _left(text, m.start(), 55)
         if _has_any(left, PASSPORT_NEG):
@@ -607,10 +563,9 @@ def detect_passport(text: str) -> list[Finding]:
         digits = _digits_only(m.group(1) + m.group(2))
         if len(digits) != 10:
             continue
-        covered.add((s1, e1))
-        covered.add((s2, e2))
-        out.append(Finding("PASSPORT", s1, e1, 0.96, "passport_anchored_v1", part="series"))
-        out.append(Finding("PASSPORT", s2, e2, 0.96, "passport_anchored_v1", part="number"))
+        s1, e2 = m.start(1), m.end(2)
+        out.append(Finding("PASSPORT", s1, e2, 0.96, "passport_anchored_v1"))
+        covered.add((m.start(), m.end()))
 
     for m in PASSPORT_COMBINED_RE.finditer(text):
         if any(not (m.end() <= a or m.start() >= b) for a, b in covered):
@@ -625,35 +580,9 @@ def detect_passport(text: str) -> list[Finding]:
         digits = _digits_only(m.group(1))
         if len(digits) != 10:
             continue
-        raw = m.group(1)
-        # «45 11 123456» / «4510 123456» → series + number when separable
-        sm = re.match(r"^(\d{2}\s?\d{2})\s+(\d{6})$", raw.strip())
-        if sm:
-            base = m.start(1)
-            out.append(
-                Finding(
-                    "PASSPORT",
-                    base + sm.start(1),
-                    base + sm.end(1),
-                    0.96,
-                    "passport_rule_v1",
-                    part="series",
-                )
-            )
-            out.append(
-                Finding(
-                    "PASSPORT",
-                    base + sm.start(2),
-                    base + sm.end(2),
-                    0.96,
-                    "passport_rule_v1",
-                    part="number",
-                )
-            )
-        else:
-            out.append(
-                Finding("PASSPORT", m.start(1), m.end(1), 0.96, "passport_rule_v1", part="number")
-            )
+        out.append(
+            Finding("PASSPORT", m.start(1), m.end(1), 0.96, "passport_rule_v1")
+        )
     return out
 
 
@@ -686,6 +615,7 @@ VU_NEG = [r"заявк", r"номер\s+заказ", r"накладн", r"пас
 
 
 def detect_driver_license(text: str) -> list[Finding]:
+    """Confirm one driver-license object; structural layer splits series/number."""
     out: list[Finding] = []
     covered: set[tuple[int, int]] = set()
 
@@ -693,12 +623,9 @@ def detect_driver_license(text: str) -> list[Finding]:
         ctx = _window(text, m.start(), m.end())
         if not _has_any(ctx, VU_POS) or _has_any(_left(text, m.start(), 40), VU_NEG):
             continue
-        s1, e1 = m.start(1), m.end(1)
-        s2, e2 = m.start(2), m.end(2)
-        out.append(Finding("DRIVER_LICENSE", s1, e1, 0.95, "driver_license_rule_v1", part="series"))
-        out.append(Finding("DRIVER_LICENSE", s2, e2, 0.95, "driver_license_rule_v1", part="number"))
-        covered.add((s1, e1))
-        covered.add((s2, e2))
+        out.append(
+            Finding("DRIVER_LICENSE", m.start(1), m.end(2), 0.95, "driver_license_rule_v1")
+        )
         covered.add((m.start(), m.end()))
 
     for m in VU_COMBINED_RE.finditer(text):
@@ -710,7 +637,7 @@ def detect_driver_license(text: str) -> list[Finding]:
         if _has_any(left, VU_NEG):
             continue
         out.append(
-            Finding("DRIVER_LICENSE", m.start(1), m.end(1), 0.95, "driver_license_rule_v1", part="number")
+            Finding("DRIVER_LICENSE", m.start(1), m.end(1), 0.95, "driver_license_rule_v1")
         )
     return out
 
