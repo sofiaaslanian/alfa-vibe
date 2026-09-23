@@ -1,0 +1,22 @@
+name: package-final-zero-minors-temp
+
+on:
+  push:
+    branches: [experiment/arch-v2-sonar-cleanup-v2]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare snapshot
+        run: |
+          mkdir -p /tmp/alfa-vibe-final-sonar-clean
+          rsync -a             --exclude='.git'             --exclude='.github/workflows/package-final-zero-minors-temp.yml'             ./ /tmp/alfa-vibe-final-sonar-clean/
+      - name: Upload snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: alfa-vibe-final-sonar-clean
+          path: /tmp/alfa-vibe-final-sonar-clean/
+          include-hidden-files: true
+          retention-days: 1
