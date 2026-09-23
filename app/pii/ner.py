@@ -335,6 +335,22 @@ class NerClient:
         if self._local is None:
             self._local = PiiNerModel()
 
+    def detect_raw(self, text: str) -> list[dict[str, Any]]:
+        """Return raw NER entities before mapping them to business PII types."""
+        if not self.enabled:
+            return []
+        if self.base_url:
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.post(f"{self.base_url}/detect", json={"text": text})
+                resp.raise_for_status()
+                data = resp.json()
+                raw = data.get("entities", data if isinstance(data, list) else [])
+            return list(raw)
+        if not self.use_local:
+            return []
+        self._ensure_local()
+        return list(self._local.predict(text))
+
     def detect(self, text: str) -> list[Finding]:
         if not self.enabled:
             return []
