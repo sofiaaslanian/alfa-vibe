@@ -55,12 +55,22 @@ _ADDRESS_PREFIX_BY_PART = {
     "flat": re.compile(r"(?i)^(?:кв\.|квартира)\s*"),
     "building": re.compile(r"(?i)^(?:корп\.|корпус|стр\.|строен\w*)\s*"),
 }
-_ADDRESS_SERVICE_RESIDUAL_RE = re.compile(
-    r"(?i)(?<!\w)(?:на|г|город|ул|улица|улице|улицу|пр|пр-т|просп|"
-    r"проспект|проспекте|проспекту|пер|переулок|переулке|ш|шоссе|"
-    r"б-р|бульвар|бульваре|наб|набережная|набережной|пл|площадь|площади|"
-    r"д|дом|кв|квартира|корп|корпус|стр|строение)\.?(?!\w)"
-)
+_ADDRESS_SERVICE_TOKENS = frozenset({
+    "на",
+    "г", "город",
+    "ул", "улица", "улице", "улицу",
+    "пр", "пр-т", "просп", "проспект", "проспекте", "проспекту",
+    "пер", "переулок", "переулке",
+    "ш", "шоссе",
+    "б-р", "бульвар", "бульваре",
+    "наб", "набережная", "набережной",
+    "пл", "площадь", "площади",
+    "д", "дом",
+    "кв", "квартира",
+    "корп", "корпус",
+    "стр", "строение",
+})
+_ADDRESS_RESIDUAL_TOKEN_RE = re.compile(r"(?iu)[а-яёa-z]+(?:-[а-яёa-z]+)?|\d+")
 
 
 def classify_fio_parts(tokens: list[str]) -> list[str]:
@@ -309,7 +319,12 @@ def _address_parts_cover_alnum(
     end: int,
     findings: list[Finding],
 ) -> bool:
-    """All semantic values must be covered; address role words may remain open."""
+    """Accept split only when every residual token is an address role label.
+
+    Semantic values are already covered by child findings. Labels such as
+    "ул.", "д.", "кв." and "на улице" may remain visible. Any other residual
+    word or number keeps the conservative whole-span fallback.
+    """
     covered = {
         index
         for finding in findings
@@ -319,8 +334,12 @@ def _address_parts_cover_alnum(
         " " if index in covered else text[index]
         for index in range(start, end)
     )
-    residual = _ADDRESS_SERVICE_RESIDUAL_RE.sub(" ", residual)
-    return not any(char.isalnum() for char in residual)
+    allowed = {token.replace("ё", "е") for token in _ADDRESS_SERVICE_TOKENS}
+    tokens = [
+        match.group(0).lower().replace("ё", "е")
+        for match in _ADDRESS_RESIDUAL_TOKEN_RE.finditer(residual)
+    ]
+    return all(token in allowed for token in tokens)
 
 
 def split_address_span(
