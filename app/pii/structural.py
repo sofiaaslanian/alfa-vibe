@@ -81,12 +81,18 @@ def _split_cardholder(text: str, finding: Finding) -> list[Finding]:
 
 
 def _normalize_composite(text: str, finding: Finding) -> list[Finding]:
+    # ADDRESS has one structural authority regardless of detector source.
+    # ML may already classify a candidate as street/house, but its raw entity
+    # span can still include role labels ("ул.", "д.", "кв."). Always pass
+    # ADDRESS through the shared value-span normalizer before masking.
+    if finding.type == "ADDRESS":
+        return _split_address(text, finding)
+
     if getattr(finding, "part", ""):
         return [finding]
 
     splitters = {
         "PERSON": _split_person,
-        "ADDRESS": _split_address,
         "CARDHOLDER_NAME": _split_cardholder,
         "PASSPORT": _split_series_number,
         "DRIVER_LICENSE": _split_series_number,
