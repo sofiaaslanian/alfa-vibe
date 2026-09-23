@@ -132,6 +132,11 @@ def expected_mask(text: str, values: list[str]) -> str:
     for value in values:
         start_at = cursor_by_value.get(value, 0)
         start = text.find(value, start_at)
+        # A short value may also occur inside an already-protected longer
+        # value (e.g. "7" in a birth date and later as house number). The
+        # expectation builder must select the next uncovered occurrence.
+        while start >= 0 and any(protected[start : start + len(value)]):
+            start = text.find(value, start + 1)
         if start < 0:
             raise AssertionError(f"Expected value {value!r} not found in {text!r}")
         cursor_by_value[value] = start + len(value)
