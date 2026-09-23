@@ -539,6 +539,7 @@ DATE_ROLE_LABELS = {
     ],
     "issue": [
         r"дата\s+выдач\w*\s+паспорт",
+        r"дат[аы]\s+выдач\w*",
         r"паспорт\s+выдан",
         r"выдан",
     ],
@@ -622,7 +623,7 @@ def detect_passport_issue_date(text: str) -> list[Finding]:
 
 # --- passport ---
 PASSPORT_SPLIT_RE = re.compile(
-    r"серия\s+(\d{2}\s?\d{2})\s*,?\s*номер\s+(\d{6})",
+    r"серия(?:\s+паспорта?)?\s+(\d{2}\s?\d{2})\s*,?\s*номер\s+(\d{6})",
     re.IGNORECASE,
 )
 PASSPORT_ANCHORED_RE = re.compile(
@@ -980,7 +981,8 @@ CITIZEN_LABEL_RE = re.compile(
     r")"
     r"\s*[:\-—–]?\s*"
     r"|"
-    r"гражданин(?:ка)?\s+",
+    # Morphological role: гражданин / гражданином / гражданка / гражданкой …
+    r"граждан(?:ин(?:ом|а|у|е)?|к(?:а|ой|е|у))\s+",
     re.IGNORECASE,
 )
 CITIZEN_VALUE_RE = re.compile(
@@ -1033,6 +1035,7 @@ def detect_citizenship(text: str) -> list[Finding]:
 # --- passport issuer ---
 ISSUER_ORG_RE = re.compile(
     r"(?:"
+    r"(?:(?:отдел(?:ом|а|е)?|отделени(?:ем|я|е)|территориальн\w*\s+отдел\w*)\s+)?"
     r"(?:ГУ|ОМВД|УВД|МВД|ОВД|ТП|УФМС|УМВД|ГУВД|МФЦ)"
     r"(?:\s+(?:МВД|России|РФ))?"
     r"\s+[А-Яа-яЁёA-Za-z0-9\.\-]+"
@@ -1111,7 +1114,7 @@ def detect_passport_issuer(text: str) -> list[Finding]:
 # --- cardholder ---
 CARDHOLDER_LABEL_RE = re.compile(
     r"(?:"
-    r"имя\s+держателя\s+карты"
+    r"имя\s+держателя(?:\s+карты)?"
     r"|держател\w*\s+карты"
     r"|имя\s+на\s+карт\w*"
     r"|embossed\s+name"
@@ -1139,8 +1142,14 @@ def _detect_cardholder_name_candidate(text: str) -> list[Finding]:
     out: list[Finding] = []
     for m in CARDHOLDER_LABEL_RE.finditer(text):
         left = _left(text, m.start(), ROLE_WINDOW)
-        if _has_any(left + m.group(0), CARDHOLDER_NEG):
+        label_ctx = left + m.group(0)
+        if _has_any(label_ctx, CARDHOLDER_NEG):
             continue
+        # Bare «имя держателя» is accepted only when the nearby discourse
+        # establishes a card role; this avoids turning arbitrary holders into PII.
+        if re.fullmatch(r"(?i)имя\s+держателя\s*[:\-—–]?\s*", m.group(0)):
+            if not re.search(r"(?i)карт\w*", left):
+                continue
         rest = text[m.end() :]
         vm = CARDHOLDER_VALUE_RE.match(rest)
         if not vm:
