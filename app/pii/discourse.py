@@ -70,22 +70,20 @@ def _ctx(text: str, start: int, end: int, size: int = WINDOW) -> str:
 def has_kyc_or_self_claim(text: str, start: int, end: int) -> bool:
     left = _left(text, start)
     right = _right(text, end, 48)
-    if KYC_FIELD_RE.search(left) or SELF_ID_BEFORE_RE.search(left):
-        return True
-    if SELF_ID_AFTER_RE.search(right):
-        return True
-    if CLIENT_ROLE_RE.search(left):
-        return True
-    return False
+    return bool(
+        KYC_FIELD_RE.search(left)
+        or SELF_ID_BEFORE_RE.search(left)
+        or SELF_ID_AFTER_RE.search(right)
+        or CLIENT_ROLE_RE.search(left)
+    )
 
 
 def has_third_party_discourse(text: str, start: int, end: int) -> bool:
     ctx = _ctx(text, start, end)
-    if THIRD_PARTY_RE.search(ctx):
-        return True
-    if APPOSITION_RE.search(_right(text, end, 40)):
-        return True
-    return False
+    return bool(
+        THIRD_PARTY_RE.search(ctx)
+        or APPOSITION_RE.search(_right(text, end, 40))
+    )
 
 
 def is_personal_person_mention(text: str, start: int, end: int) -> bool:
@@ -137,9 +135,9 @@ def is_personal_address_mention(text: str, start: int, end: int) -> bool:
     if re.search(r"(?i)адрес", left):
         return not public
     # Structured street address without public cue — keep (format-context)
-    if re.search(r"(?i)(?:ул\.|улиц|пр\.|проспект|проезд|пер\.|ш\.|дом|\bд\.)", value):
-        return True
-    return False
+    return bool(
+        re.search(r"(?i)(?:ул\.|улиц|пр\.|проспект|проезд|пер\.|ш\.|дом|\bд\.)", value)
+    )
 
 
 def should_skip_address(text: str, start: int, end: int) -> bool:
@@ -152,11 +150,10 @@ def is_personal_inn_mention(text: str, start: int, end: int) -> bool:
 
     _ = end
     left_ctx = _left(text, start)
-    if INN_PERSONAL_RE.search(left_ctx):
-        return True
-    if INN_PUBLIC_RE.search(left_ctx):
-        return False
-    return True
+    return bool(
+        INN_PERSONAL_RE.search(left_ctx)
+        or not INN_PUBLIC_RE.search(left_ctx)
+    )
 
 
 def should_skip_inn(text: str, start: int, end: int) -> bool:
@@ -247,8 +244,6 @@ def is_personal_birth_date_mention(text: str, start: int, end: int) -> bool:
     # «день рождения Пушкина» / news about a celebrity DOB → not client's PII
     if birth and third and not self_claim:
         return False
-    if birth:
-        return True
     # Rules emit BIRTH_DATE only with birth role; keep residual spans
     return True
 
@@ -262,12 +257,6 @@ def is_personal_place_of_birth_mention(text: str, start: int, end: int) -> bool:
     left = _left(text, start, 100)
     third = has_third_party_discourse(text, start, end)
     self_claim = has_kyc_or_self_claim(text, start, end)
-    labelled = bool(
-        re.search(
-            r"(?i)место\s+рожден|place\s+of\s+birth|birth\s*place",
-            left,
-        )
-    )
     client_near = bool(
         re.search(
             r"(?i)(?<![А-ЯЁA-Z])(?:клиент\w*|пользовател\w*|заявител\w*)",
@@ -275,15 +264,9 @@ def is_personal_place_of_birth_mention(text: str, start: int, end: int) -> bool:
         )
     )
 
-    # Celebrity / biography narrative without KYC → not client PII
-    if third and not self_claim and not client_near:
-        return False
-    if labelled or self_claim or client_near:
-        return True
-    # Bare «родился в X» — keep (format-context); third-party already filtered above
-    if re.search(r"(?i)родил(?:ся|ась)", left):
-        return True
-    return True
+    # Celebrity / biography narrative without KYC → not client PII.
+    # Every other PLACE_OF_BIRTH finding is kept by policy.
+    return not (third and not self_claim and not client_near)
 
 
 def should_skip_place_of_birth(text: str, start: int, end: int) -> bool:
