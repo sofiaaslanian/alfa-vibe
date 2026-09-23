@@ -171,6 +171,17 @@ EMAIL_NEG_ROLES = [
 
 
 
+# Explicit non-personal/documentation roles for otherwise valid email syntax.
+# A nearby personal ownership cue still wins.
+EMAIL_NONPERSONAL_CONTEXT = [
+    r"\bшаблон\w*",
+    r"\bпример\w*",
+    r"документац",
+    r"инструкц",
+    r"тестов\w*",
+]
+
+
 def _email_is_malformed(value: str) -> bool:
     return ".." in value or value.startswith(".") or "@." in value
 
