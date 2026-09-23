@@ -360,7 +360,7 @@ ADDRESS_RE = re.compile(
     rf"(?:\s*,\s*|\s+){HOUSE_BIT}{EXTRA_BIT}{APT_BIT}"
 )
 SHORT_ADDRESS_RE = re.compile(
-    rf"(?:дом|д\.)\s*\d+[А-Яа-яA-Za-z]?(?:\s*,\s*|\s+)(?:кв\.|квартира)\s*\d+"
+    r"(?:дом|д\.)\s*\d+[А-Яа-яA-Za-z]?(?:\s*,\s*|\s+)(?:кв\.|квартира)\s*\d+"
 )
 SPOKEN_ADDRESS_RE = re.compile(
     rf"(?:на\s+)?"
