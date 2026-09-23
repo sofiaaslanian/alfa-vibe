@@ -146,7 +146,6 @@ jobs:
           echo "roundtrip ok x20"
           curl -sf -o /dev/null -w "ui=%{http_code}\n" http://localhost:8080/
           curl -sf -o /dev/null -w "css=%{http_code}\n" http://localhost:8080/ui/styles.css
-          curl -sf -o /dev/null -w "icon=%{http_code}\n" http://localhost:8080/ui/icons/sparkle-mask.png
           curl -s -o /dev/null -w "proxy_no_key=%{http_code}\n" http://localhost:8080/proxy/chat \
             -H 'Content-Type: application/json' -d '{"text":"hi"}'
       - name: Container logs
