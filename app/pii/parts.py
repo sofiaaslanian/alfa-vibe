@@ -13,7 +13,7 @@ from app.pii.detect import Finding
 _PATRONYMIC_RE = re.compile(
     r"(?i)(?:ич|ича|ичу|ичем|иче|вна|вны|вне|вну|вной|ична|ичны|ичне|ичну|ичной)$"
 )
-_FIO_TOKEN_RE = re.compile(r"[А-ЯЁA-Z][А-Яа-яЁёA-Za-z\-]*")
+_FIO_TOKEN_RE = re.compile(r"[А-ЯЁA-Z][А-Яа-яЁёA-Za-z\-]*\.?")
 _LAT_TOKEN_RE = re.compile(r"[A-Z][A-Za-z\-]*")
 
 # Address component extractors (inside an already-validated ADDRESS span).

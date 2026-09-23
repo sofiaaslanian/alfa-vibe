@@ -67,6 +67,13 @@ def _trim_value_span(text: str, start: int, end: int) -> tuple[int, int] | None:
     while end > start and text[end - 1].isspace():
         end -= 1
     while end > start and text[end - 1] in ".,;:!?»\"'":
+        # Keep initials: «И.» / «И.И.» (single capital letter + dot)
+        if text[end - 1] == "." and end >= 2:
+            prev = text[end - 2]
+            if prev.isalpha() and prev.isupper():
+                before = text[end - 3] if end >= 3 else ""
+                if before == "" or before.isspace() or before == ".":
+                    break
         end -= 1
     if start >= end:
         return None
@@ -943,6 +950,12 @@ _RU_FIO_1_3 = rf"{_RU_NAME}(?:\s+{_RU_NAME}){{0,2}}"
 _RU_FIO_LOOSE = rf"{_RU_NAME_LOOSE}(?:\s+{_RU_NAME_LOOSE}){{1,2}}"
 # Self-ID only: 1–3 tokens, any case («я соня», «я Соня Асланян»)
 _RU_FIO_1_3_LOOSE = rf"{_RU_NAME_LOOSE}(?:\s+{_RU_NAME_LOOSE}){{0,2}}"
+# Initials after KYC/role only: «Иванов И.И.» / «И.И. Иванов»
+_RU_INITIAL = r"[А-ЯЁ]\."
+_RU_FIO_INITIALS = (
+    rf"(?:{_RU_NAME}\s+{_RU_INITIAL}\s*{_RU_INITIAL}"
+    rf"|{_RU_INITIAL}\s*{_RU_INITIAL}\s+{_RU_NAME})"
+)
 _LAT_NAME = r"[A-Z][A-Za-z\-]*\.?"  # IVAN / I. / I
 _LAT_FIO = rf"{_LAT_NAME}(?:[ \t]+{_LAT_NAME}){{1,2}}"
 _PLACE_ATOM = (
@@ -1210,9 +1223,13 @@ def detect_cardholder_name(text: str) -> list[Finding]:
 PERSON_LABEL_RE = re.compile(
     r"(?:"
     r"ФИО(?:\s+клиента)?"
+    r"|\bfio\b(?:\s+клиента)?"
     r"|ф\.?\s*и\.?\s*о\.?"
+    r"|f\.?\s*i\.?\s*o\.?"
     r"|фамилия\s*,?\s*имя(?:\s*и?\s*отчество)?"
     r"|полное\s+имя(?:\s+клиента)?"
+    r"|имя\s+клиента"
+    r"|(?<![А-Яа-яЁёA-Za-z0-9])имя"
     r"|full\s*name"
     r"|customer\s*name"
     r"|client\s*name"
@@ -1221,21 +1238,65 @@ PERSON_LABEL_RE = re.compile(
     re.IGNORECASE,
 )
 PERSON_VALUE_RE = re.compile(
-    rf"(?:{_RU_FIO_LOOSE}|{_LAT_FIO})"
+    rf"(?:{_RU_FIO_LOOSE}|{_LAT_FIO}|{_RU_FIO_INITIALS})"
 )
 # Inflected role words: клиенту / клиента / клиентом …
 _PERSON_ROLE_WORD = (
     r"клиент\w*|заявител\w*|пользовател\w*|"
-    r"заёмщик\w*|заемщик\w*|вкладчик\w*"
+    r"заёмщик\w*|заемщик\w*|вкладчик\w*|"
+    r"получател\w*|владелец\w*|подписант\w*"
+)
+# Role tokens that must never start a banking-lead FIO span
+_PERSON_ROLE_STOP = frozenset(
+    {
+        "клиент",
+        "клиента",
+        "клиенту",
+        "клиентом",
+        "клиенте",
+        "заявитель",
+        "заявителя",
+        "заявителю",
+        "пользователь",
+        "пользователя",
+        "заемщик",
+        "заёмщик",
+        "вкладчик",
+        "получатель",
+        "получателя",
+        "получателю",
+        "владелец",
+        "владельца",
+        "подписант",
+        "подписанта",
+        "менеджер",
+        "докладчик",
+        "спикер",
+    }
 )
 PERSON_CLIENT_RE = re.compile(
     r"(?<![А-Яа-яЁёA-Za-z])"
     rf"(?i:{_PERSON_ROLE_WORD})"
-    r"\s*[:\-—–]?\s*"
-    r"[«\"']?\s*"
-    rf"({_RU_FIO_2_3}|{_LAT_FIO})"
-    r"\s*[»\"']?"
-    r"(?=[\s,.;:!?»\"']|$)"
+    rf"\s*[:\-—–]?\s*"
+    rf"[«\"']?\s*"
+    rf"({_RU_FIO_1_3}|{_LAT_FIO}|{_RU_FIO_INITIALS})"
+    rf"\s*[»\"']?"
+    rf"(?=[\s,.;:!?»\"']|$)"
+)
+# «Паспорт на имя Иванова Ивана» / «В заявке указан Петров Иван»
+PERSON_NA_IMYA_RE = re.compile(
+    rf"(?i:(?:на\s+имя|указан\w*))"
+    rf"\s*[:\-—–]?\s*"
+    rf"({_RU_FIO_LOOSE}|{_RU_FIO_INITIALS})"
+    rf"(?=[\s,.;:!?»\"']|$)"
+)
+# Contact display-name: Контакт: "Иван Петров" <email>
+PERSON_CONTACT_DISPLAY_RE = re.compile(
+    rf"(?i:контакт\w*)"
+    rf"\s*[:\-—–]?\s*"
+    rf"[«\"']\s*"
+    rf"({_RU_FIO_LOOSE}|{_LAT_FIO})"
+    rf"\s*[»\"']"
 )
 # Free-text contact: capitalised name(s)
 PERSON_CONTACT_RE = re.compile(
@@ -1345,7 +1406,8 @@ def _trim_fio_stop_tokens(text: str, start: int, end: int) -> tuple[int, int] | 
         parts.pop()
     if not parts:
         return None
-    if parts[0].lower().replace("ё", "е") in _YA_NAME_STOP:
+    first = parts[0].lower().replace("ё", "е")
+    if first in _YA_NAME_STOP or first in _PERSON_ROLE_STOP:
         return None
     kept = " ".join(parts)
     # Re-locate kept substring inside original span (preserve offsets)
@@ -1441,6 +1503,8 @@ def _add_role_persons(text: str, out: list[Finding], covered: set[tuple[int, int
     for regex, score, detector in (
         (PERSON_CLIENT_RE, 0.9, "person_role_rule_v2"),
         (PERSON_CONTACT_RE, 0.88, "person_contact_rule_v2"),
+        (PERSON_CONTACT_DISPLAY_RE, 0.9, "person_contact_display_v2"),
+        (PERSON_NA_IMYA_RE, 0.9, "person_na_imya_v2"),
         (PERSON_CALLED_FRONT_RE, 0.92, "person_called_front_rule_v2"),
     ):
         for match in regex.finditer(text):
@@ -1468,8 +1532,12 @@ def _add_banking_lead_persons(text: str, out: list[Finding], covered: set[tuple[
     if not has_banking_intent(text, include_generic=False):
         return
     for match in PERSON_BANKING_LEAD_RE.finditer(text):
-        _add_person_candidate(text, out, covered, match.start(1), match.end(1), 0.85, "person_banking_lead_v2")
-
+        first = text[match.start(1) : match.end(1)].split()[0].lower().replace("ё", "е")
+        if first in _PERSON_ROLE_STOP:
+            continue
+        _add_person_candidate(
+            text, out, covered, match.start(1), match.end(1), 0.85, "person_banking_lead_v2"
+        )
 
 def _detect_person_labelled_candidate(text: str) -> list[Finding]:
     out: list[Finding] = []

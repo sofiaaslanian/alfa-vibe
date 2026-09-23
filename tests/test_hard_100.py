@@ -504,6 +504,7 @@ CASES = [
         "text": "fio: Петров Иван\nemail: ivan@example.ru\nbirth_date: 01.02.1990",
         "enabled_types": ["PERSON_NAME", "EMAIL", "BIRTH_DATE"],
         "expected": [
+            {"type": "PERSON_NAME", "value": "Петров Иван", "match": "exact"},
             {"type": "EMAIL", "value": IVAN_EMAIL, "match": "exact"},
             {"type": "BIRTH_DATE", "value": "01.02.1990", "match": "exact"},
         ],

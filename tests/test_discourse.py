@@ -35,10 +35,29 @@ def _persons(text: str) -> list[str]:
         ("Я София Асланян", "София Асланян"),
         ("Иван Петров хочет оформить карту", "Иван Петров"),
         ("свяжитесь с Иваном", "Иваном"),
+        ("fio: Петров Иван", "Петров Иван"),
+        ("Клиент Иван просит оформить карту", "Иван"),
+        ("Получатель: Иван Петров", "Иван Петров"),
+        ("Паспорт на имя Иванова Ивана", "Иванова Ивана"),
+        ('Контакт: "Иван Петров"', "Иван Петров"),
+        ("имя: Мария Кузнецова", "Мария Кузнецова"),
+        ("ФИО: Иванов И.И.", "Иванов И.И."),
     ],
 )
 def test_personal_claims_masked(text, expected):
     assert expected in _persons(text)
+
+
+def test_client_single_name_does_not_mask_role():
+    text = "Клиент Иван просит оформить карту"
+    persons = _persons(text)
+    assert "Иван" in persons
+    assert not any(p == "Клиент" or p.startswith("Клиент ") for p in persons)
+
+
+def test_bare_fio_and_initials_without_claim_skipped():
+    assert _persons("Иван Иванов") == []
+    assert _persons("Иванов И.И.") == []
 
 
 def test_ner_mid_sentence_banking(monkeypatch):

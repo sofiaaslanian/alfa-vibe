@@ -15,7 +15,8 @@ _ZOVUT = r"з[оа]в[уы]т"
 _MENYA = r"мен[яа]"
 _MOE = r"мо[её]"
 _IMYA = r"им[яа]"
-_FIO = r"(?:фио|ф\.?\s*и\.?\s*о\.?)"
+# Cyrillic ФИО + Latin fio / f.i.o. (IGNORECASE treats them as distinct scripts)
+_FIO = r"(?:фио|\bfio\b|ф\.?\s*и\.?\s*о\.?|f\.?\s*i\.?\s*o\.?)"
 _KLIENT = r"кли[еэ]нт\w*"
 _USER = r"пользовател\w*"
 
@@ -59,7 +60,15 @@ KYC_FIELD_PATTERNS: tuple[str, ...] = (
     r"заявитель",
     r"за[её]мщик",
     r"вкладчик",
+    r"получател\w*",
+    r"владелец\s+сч[её]та",
+    r"подписант\w*",
     r"имя\s+клиента",
+    # Field label «имя:» / «на имя» (passport / payment framing)
+    r"(?<![А-Яа-яЁёA-Za-z0-9])имя\s*[:\-—–]",
+    r"на\s+имя",
+    r"указан\w*",
+    r"контакт\w*",
     r'"\s*name\s*"\s*:',
     r"holder[_\s-]?name",
     r"full[_\s-]?name",
@@ -73,6 +82,9 @@ CLIENT_ROLE_PATTERNS: tuple[str, ...] = (
     r"заявител\w*",
     r"за[её]мщик\w*",
     r"вкладчик\w*",
+    r"получател\w*",
+    r"владелец\w*",
+    r"подписант\w*",
 )
 
 
