@@ -10,6 +10,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -169,8 +170,8 @@ def _open_pii_leaked(text: str, findings: list, masked: str) -> list[str]:
 async def process(
     request: Request,
     body: ProcessRequest,
-    x_system: str | None = Header(default=None, alias="X-System"),
-    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    x_system: Annotated[str | None, Header(alias="X-System")] = None,
+    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
 ):
     # Org Q&A: /process autotest does NOT require API key / consumer auth.
     # Keep x_api_key in signature for compatibility; ignore it here.
@@ -226,9 +227,9 @@ async def process(
 async def proxy_chat(
     request: Request,
     body: ProxyRequest,
-    x_system: str | None = Header(default=None, alias="X-System"),
-    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
-    x_consumer_id: str | None = Header(default=None, alias="X-Consumer-Id"),
+    x_system: Annotated[str | None, Header(alias="X-System")] = None,
+    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
+    x_consumer_id: Annotated[str | None, Header(alias="X-Consumer-Id")] = None,
 ):
     if not _api_key_ok(x_api_key):
         raise HTTPException(401, _INVALID_API_KEY)
@@ -342,9 +343,9 @@ def _demo_findings_payload(text: str, findings) -> list[dict]:
 async def demo_run(
     request: Request,
     body: DemoRunRequest,
-    x_system: str | None = Header(default=None, alias="X-System"),
-    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
-    x_consumer_id: str | None = Header(default=None, alias="X-Consumer-Id"),
+    x_system: Annotated[str | None, Header(alias="X-System")] = None,
+    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
+    x_consumer_id: Annotated[str | None, Header(alias="X-Consumer-Id")] = None,
 ):
     """Pipeline x-ray for Contour UI: DETECT → MASK → LLM → DEMASK."""
     if not _api_key_ok(x_api_key):
