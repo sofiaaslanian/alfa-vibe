@@ -1,12 +1,12 @@
 systems:
-  # Evaluator /process profile prioritizes deterministic/high-RPS behavior:
-  # context-defined PII uses precise rules; ML is enabled in the demo profile.
+  # Evaluator /process profile uses the production hybrid path:
+  # context-defined PII combines ML candidates with precise rules.
   autotest:
     enabled: true
     pd_types: []
     allow_demask: true
     mask_style: dev_redact
-    use_context_ml: false
+    use_context_ml: true
 
   demo:
     enabled: true
