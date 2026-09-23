@@ -95,23 +95,26 @@ class ContextFlow:
         *,
         ml_findings: list[Finding] | None = None,
     ) -> FlowResult:
-        findings = ContextFlow._rule_candidates(text)
-        if ml_findings:
-            # Only context-group outputs enter this flow. Format and
-            # format-context types stay owned by their rule pipelines.
-            findings.extend(
-                f
-                for f in ml_findings
-                if f.type in {
-                    "PERSON",
-                    "ADDRESS",
-                    "PLACE_OF_BIRTH",
-                    "CITIZENSHIP",
-                    "PASSPORT_ISSUER",
-                    "CARDHOLDER_NAME",
-                }
-            )
-        return FlowResult(findings, "context_ml" if ml_findings else "context_rules_fallback")
+        # None means ML is disabled for this request: use the compatibility
+        # fallback while migrating from baseline 9465.
+        if ml_findings is None:
+            return FlowResult(ContextFlow._rule_candidates(text), "context_rules_fallback")
+
+        # A list (including an empty list) means the ML flow is authoritative.
+        # Do not silently fall back to rules when the model returns no entity.
+        findings = [
+            f
+            for f in ml_findings
+            if f.type in {
+                "PERSON",
+                "ADDRESS",
+                "PLACE_OF_BIRTH",
+                "CITIZENSHIP",
+                "PASSPORT_ISSUER",
+                "CARDHOLDER_NAME",
+            }
+        ]
+        return FlowResult(findings, "context_ml")
 
 
 def run_detection_flows(
