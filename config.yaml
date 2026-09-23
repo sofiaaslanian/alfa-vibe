@@ -1,6 +1,6 @@
 systems:
-  # Evaluator /process profile follows the target architecture:
-  # context-defined PII goes through the ML flow.
+  # Evaluator /process profile prioritizes deterministic/high-RPS behavior:
+  # context-defined PII uses precise rules; ML is enabled in the demo profile.
   autotest:
     enabled: true
     pd_types: []
