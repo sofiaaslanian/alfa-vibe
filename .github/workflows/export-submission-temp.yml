@@ -1,0 +1,30 @@
+name: Export AlfaGen submission
+
+on:
+  push:
+    branches:
+      - submission/alfagen-10000-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build clean submission ZIP
+        run: |
+          rm -f .github/workflows/export-submission-temp.yml
+          bash scripts/pack_submission.sh /tmp/alfa-vibe-AlfaGen-10000.zip
+          unzip -l /tmp/alfa-vibe-AlfaGen-10000.zip | tail -n 5
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alfa-vibe-AlfaGen-10000
+          path: /tmp/alfa-vibe-AlfaGen-10000.zip
+          if-no-files-found: error
+          retention-days: 1
