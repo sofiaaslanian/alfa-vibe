@@ -31,7 +31,7 @@ The structural decision is made after the PII type is confirmed.
 | ИНН | INN | Format / rules | Atomic |
 | Номер банковской карты | PAYMENT_CARD | Format / rules | Atomic |
 
-Core evaluator pipeline contains exactly these 17 types. SNILS / OMS / international passport remain optional extensions outside the canonical core flow.
+Core evaluator pipeline contains exactly these 17 types. SNILS / OMS / international passport remain optional extensions outside the canonical core flow and are not executed by the three canonical flows.
 
 ## 2. Common pipeline
 
@@ -134,9 +134,11 @@ Examples:
     ORG + "паспорт выдан"          -> PASSPORT_ISSUER
     CITY/STREET/HOUSE + address role -> ADDRESS
 
-Important contract: when ML is enabled for a request, an empty ML result is authoritative. The pipeline does not silently replace it with legacy context rules.
+Important contract: when ML is enabled for a request, an empty ML result is authoritative for every type the selected model can express. The pipeline does not silently replace an ML miss with legacy context rules.
 
-Migration mode exists only when context ML is disabled: old labelled rules act as compatibility fallback.
+Current model coverage is 5/6 context types: PERSON, PLACE_OF_BIRTH, CITIZENSHIP, ADDRESS, CARDHOLDER_NAME. The selected RuBERT model has no ORG label, so PASSPORT_ISSUER has one explicit temporary rules fallback. This fallback is isolated and should disappear when an ORG-capable context model is connected.
+
+When context ML is disabled entirely, old labelled rules act as compatibility fallback for the whole context group.
 
 ## 6. Shared structural layer
 
