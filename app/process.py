@@ -89,15 +89,17 @@ class ProcessService:
         master = os.getenv("CONTEXT_ML_ENABLED", os.getenv("NER_ENABLED", "0"))
         if master != "1":
             return False
-        if not system:
-            return False
-        if system in self.config.systems:
-            flag = self.config.systems[system].use_context_ml
+
+        # Public /process has no X-System header. Treat it as the explicit
+        # autotest profile instead of silently disabling the context ML flow.
+        effective_system = system or "autotest"
+        if effective_system in self.config.systems:
+            flag = self.config.systems[effective_system].use_context_ml
             if flag is not None:
                 return flag
-        if system in {"autotest", "high_rps", "format_only"}:
+        if effective_system in {"high_rps", "format_only"}:
             return False
-        return system == "demo"
+        return effective_system in {"autotest", "demo"}
 
     def _ner_for_system(self, system: Optional[str], need_person: bool) -> bool:
         """Backward-compatible alias for the pre-v2 routing API."""
