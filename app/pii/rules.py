@@ -186,9 +186,12 @@ def _email_candidate(text: str, match) -> Finding | None:
     local, _, domain = value.partition("@")
     local_l, domain_l = local.lower(), domain.lower()
     left = _left(text, match.start(), ROLE_WINDOW)
-    personal = _has_any(left, EMAIL_PERSONAL_CUES)
+    ctx = _window(text, match.start(), match.end(), ROLE_WINDOW)
+    personal = _has_any(left, EMAIL_PERSONAL_CUES) or _has_any(ctx, EMAIL_PERSONAL_CUES)
     service = _email_is_service(local_l, domain_l)
     if _neg_wins(left, EMAIL_NEG_ROLES, EMAIL_PERSONAL_CUES):
+        return None
+    if _has_any(ctx, EMAIL_NONPERSONAL_CONTEXT) and not personal:
         return None
     if service and not personal:
         return None
@@ -539,10 +542,12 @@ DATE_ROLE_LABELS = {
     ],
     "issue": [
         r"дата\s+выдач\w*\s+паспорт",
+        r"дата\s+выдач\w*",
         r"паспорт\s+выдан",
         r"выдан",
     ],
     "other": [
+        r"дата\s+выдач\w*\s+(?:заказ|карт|справк|удостоверен|полис|товар|пропуск)",
         r"дата\s+выдач\w*\s+заказ",
         r"дат[аы]\s+договор",
         r"договор\w*\s+подписан",
@@ -622,7 +627,7 @@ def detect_passport_issue_date(text: str) -> list[Finding]:
 
 # --- passport ---
 PASSPORT_SPLIT_RE = re.compile(
-    r"серия\s+(\d{2}\s?\d{2})\s*,?\s*номер\s+(\d{6})",
+    r"серия(?:\s+паспорта)?\s+(\d{2}\s?\d{2})\s*[,;:\-]?\s*номер\s+(\d{6})",
     re.IGNORECASE,
 )
 PASSPORT_ANCHORED_RE = re.compile(
@@ -630,7 +635,7 @@ PASSPORT_ANCHORED_RE = re.compile(
     r"(?:[\s,.:;!?()«»\"'\-]+[а-яё]+){0,3}"
     r"[\s,.:;!?()«»\"'№\-]*"
     r"(\d{2}[\s\-]?\d{2})"
-    r"[\s\-]*(?:(?:№|номер)[\s№:.\-]*)?"
+    r"[\s,;:\-]*(?:(?:№|номер)[\s№:.\-]*)?"
     r"(\d{6})"
     r"(?:\D|$)"
 )
@@ -980,7 +985,7 @@ CITIZEN_LABEL_RE = re.compile(
     r")"
     r"\s*[:\-—–]?\s*"
     r"|"
-    r"гражданин(?:ка)?\s+",
+    r"граждан(?:ин\w*|к\w*)\s+",
     re.IGNORECASE,
 )
 CITIZEN_VALUE_RE = re.compile(
@@ -1033,6 +1038,7 @@ def detect_citizenship(text: str) -> list[Finding]:
 # --- passport issuer ---
 ISSUER_ORG_RE = re.compile(
     r"(?:"
+    r"(?:(?:территориальн\w+\s+)?отдел\w*\s+)?"
     r"(?:ГУ|ОМВД|УВД|МВД|ОВД|ТП|УФМС|УМВД|ГУВД|МФЦ)"
     r"(?:\s+(?:МВД|России|РФ))?"
     r"\s+[А-Яа-яЁёA-Za-z0-9\.\-]+"
@@ -1112,6 +1118,7 @@ def detect_passport_issuer(text: str) -> list[Finding]:
 CARDHOLDER_LABEL_RE = re.compile(
     r"(?:"
     r"имя\s+держателя\s+карты"
+    r"|имя\s+держател\w*"
     r"|держател\w*\s+карты"
     r"|имя\s+на\s+карт\w*"
     r"|embossed\s+name"
@@ -1139,7 +1146,15 @@ def _detect_cardholder_name_candidate(text: str) -> list[Finding]:
     out: list[Finding] = []
     for m in CARDHOLDER_LABEL_RE.finditer(text):
         left = _left(text, m.start(), ROLE_WINDOW)
-        if _has_any(left + m.group(0), CARDHOLDER_NEG):
+        label = m.group(0)
+        if _has_any(left + label, CARDHOLDER_NEG):
+            continue
+        # "имя держателя" is a valid abbreviated field label only when the
+        # nearby context establishes that the holder is a card holder.
+        if not re.search(r"(?i)карт|card", label) and not _has_any(
+            _window(text, m.start(), m.end(), 80),
+            [r"карт", r"card"],
+        ):
             continue
         rest = text[m.end() :]
         vm = CARDHOLDER_VALUE_RE.match(rest)
