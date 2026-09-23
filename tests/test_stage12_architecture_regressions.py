@@ -106,3 +106,18 @@ def test_generic_issue_date_does_not_beat_specific_non_passport_role():
 def test_address_mask_hides_values_but_preserves_structure(text, expected):
     masked = apply_dev_redact(text, detect_pii(text, enable_ner=False))
     assert masked == expected
+
+
+def test_ml_address_parts_are_recanonicalized_before_masking():
+    from app.pii.detect import Finding
+    from app.pii.structural import normalize_structures
+
+    text = "Адрес: Москва, ул. Лесная, д. 10."
+    raw_ml = [
+        Finding("ADDRESS", text.index("Москва"), text.index("Москва") + len("Москва"), 0.99, "context_ml_v1", part="city"),
+        Finding("ADDRESS", text.index("ул."), text.index("Лесная") + len("Лесная"), 0.99, "context_ml_v1", part="street"),
+        Finding("ADDRESS", text.index("д."), text.index("10") + len("10"), 0.99, "context_ml_v1", part="house"),
+    ]
+    normalized = normalize_structures(text, raw_ml)
+    values = [text[f.start:f.end] for f in normalized]
+    assert values == ["Москва", "Лесная", "10"]
