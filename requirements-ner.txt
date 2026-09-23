@@ -1,5 +1,5 @@
 # Optional RuBERT FIO (not required for /process load or 68 cases with labelled/role rules)
 -r requirements.txt
-transformers>=4.44.0
-torch>=2.2.0
-accelerate>=0.33.0
+transformers==5.17.0
+torch==2.14.0
+accelerate==1.15.0
