@@ -517,7 +517,7 @@ async function run() {
 
 document.getElementById("api-key").value = apiKey();
 document.getElementById("api-key").addEventListener("change", (e) => {
-  localStorage.setItem("alfa_proxy_key", e.target.value.trim() || "demo-key");
+  localStorage.setItem("alfa_proxy_key", e.target.value.trim());
 });
 els.system.addEventListener("change", updateConsumerLine);
 els.input.addEventListener("input", () => {
