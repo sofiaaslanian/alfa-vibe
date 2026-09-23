@@ -3,6 +3,7 @@ name: sonar-scan-temp
 on:
   push:
     branches: [cursor/alfagen-sonar-10000]
+    paths-ignore: [.github/workflows/sonar-calibrate-temp.yml]
   workflow_dispatch:
 
 permissions:
