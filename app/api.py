@@ -37,6 +37,10 @@ TPS = Counter("alfa_tokens_total", "Estimated tokens", ["route"])
 # Sync load clients ≈200; reject excess with 429 (not an SLA error per org Q&A).
 _process_sem: asyncio.Semaphore | None = None
 
+_INVALID_API_KEY = "invalid API key"
+_SYSTEM_FORBIDDEN = "X-System missing or not allowed"
+_UI_NOT_BUILT = "UI not built"
+
 
 def _process_semaphore() -> asyncio.Semaphore:
     global _process_sem
@@ -107,16 +111,18 @@ def _system(request: Request, x_system: str | None) -> str:
     return x_system or request.headers.get("X-System", "") or ""
 
 
-def _check_system(cfg: Config, system: str, *, required: bool = False) -> str:
+def _known_system(cfg: Config, system: str) -> str:
     """Return effective system name. Unknown systems ignored on /process (org: no header)."""
+    if system and system in cfg.systems and cfg.systems[system].enabled:
+        return system
+    return ""  # autotest: ignore junk X-System
+
+
+def _require_system(cfg: Config, system: str) -> str:
     if not system:
-        if required:
-            raise HTTPException(403, "X-System required")
-        return ""
-    if system not in cfg.systems or not cfg.systems[system].enabled:
-        if required:
-            raise HTTPException(403, f"System '{system}' not allowed")
-        return ""  # autotest: ignore junk X-System
+        raise HTTPException(403, "X-System required")
+    if not _known_system(cfg, system):
+        raise HTTPException(403, f"System '{system}' not allowed")
     return system
 
 
@@ -150,7 +156,16 @@ def _open_pii_leaked(text: str, findings: list, masked: str) -> list[str]:
     return leaked
 
 
-@app.post("/process", response_model=ProcessResponse)
+@app.post(
+    "/process",
+    response_model=ProcessResponse,
+    responses={
+        409: {"description": "payload_id already bound to a different payload"},
+        410: {"description": "Operation expired"},
+        429: {"description": "Overloaded, retry after Retry-After seconds"},
+        503: {"description": "Storage or detection unavailable"},
+    },
+)
 async def process(
     request: Request,
     body: ProcessRequest,
@@ -162,7 +177,7 @@ async def process(
     _ = x_api_key
     cfg: Config = request.app.state.config
     svc: ProcessService = request.app.state.process
-    system = _check_system(cfg, _system(request, x_system), required=False)
+    system = _known_system(cfg, _system(request, x_system))
     # /process is the evaluator profile even when no X-System header is sent.
     effective_system = system or "autotest"
 
@@ -199,7 +214,15 @@ async def process(
         TPS.labels(route="process").inc(max(len(body.payload) / 4, 1))
 
 
-@app.post("/proxy/chat", response_model=ProxyResponse)
+@app.post(
+    "/proxy/chat",
+    response_model=ProxyResponse,
+    responses={
+        401: {"description": _INVALID_API_KEY},
+        403: {"description": _SYSTEM_FORBIDDEN},
+        502: {"description": "LLM or protection path failed"},
+    },
+)
 async def proxy_chat(
     request: Request,
     body: ProxyRequest,
@@ -208,14 +231,14 @@ async def proxy_chat(
     x_consumer_id: str | None = Header(default=None, alias="X-Consumer-Id"),
 ):
     if not _api_key_ok(x_api_key):
-        raise HTTPException(401, "invalid API key")
+        raise HTTPException(401, _INVALID_API_KEY)
 
     cfg: Config = request.app.state.config
     svc: ProcessService = request.app.state.process
     llm: AlfaGenClient = request.app.state.llm
 
     system = _system(request, x_system) or "demo"
-    _check_system(cfg, system, required=True)
+    _require_system(cfg, system)
     consumer = x_consumer_id or system
     op_id = body.operation_id or str(uuid.uuid4())
 
@@ -309,7 +332,13 @@ def _demo_findings_payload(text: str, findings) -> list[dict]:
     return payload
 
 
-@app.post("/demo/run")
+@app.post(
+    "/demo/run",
+    responses={
+        401: {"description": _INVALID_API_KEY},
+        403: {"description": _SYSTEM_FORBIDDEN},
+    },
+)
 async def demo_run(
     request: Request,
     body: DemoRunRequest,
@@ -319,13 +348,13 @@ async def demo_run(
 ):
     """Pipeline x-ray for Contour UI: DETECT → MASK → LLM → DEMASK."""
     if not _api_key_ok(x_api_key):
-        raise HTTPException(401, "invalid API key")
+        raise HTTPException(401, _INVALID_API_KEY)
 
     cfg: Config = request.app.state.config
     svc: ProcessService = request.app.state.process
     llm: AlfaGenClient = request.app.state.llm
     system = _system(request, x_system) or "demo"
-    _check_system(cfg, system, required=True)
+    _require_system(cfg, system)
     consumer = x_consumer_id or "demo-ui"
     op_id = body.operation_id or str(uuid.uuid4())
     stages_ms: dict[str, float] = {}
@@ -464,7 +493,7 @@ async def health(request: Request):
     )
 
 
-@app.get("/ready")
+@app.get("/ready", responses={503: {"description": "State store not ready"}})
 async def ready(request: Request):
     store = request.app.state.store
     try:
@@ -495,19 +524,19 @@ async def systems(request: Request):
     }
 
 
-@app.get("/")
+@app.get("/", responses={404: {"description": _UI_NOT_BUILT}})
 async def ui_home():
     index = UI_DIR / "index.html"
     if not index.exists():
-        raise HTTPException(404, "UI not built")
+        raise HTTPException(404, _UI_NOT_BUILT)
     return FileResponse(index)
 
 
-@app.get("/evidence")
+@app.get("/evidence", responses={404: {"description": _UI_NOT_BUILT}})
 async def ui_evidence():
     page = UI_DIR / "evidence.html"
     if not page.exists():
-        raise HTTPException(404, "UI not built")
+        raise HTTPException(404, _UI_NOT_BUILT)
     return FileResponse(page)
 
 
