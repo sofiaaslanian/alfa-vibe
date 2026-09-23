@@ -18,8 +18,16 @@ log = logging.getLogger("alfa.process")
 NS_AUTOTEST = "autotest"
 NS_PROXY = "proxy"
 
-# NER is expensive — only when PERSON is in the enabled type set.
-PERSON_TYPES = {"PERSON", "PERSON_NAME"}
+# ML context flow is needed when any context-defined type is enabled.
+CONTEXT_TYPES = {
+    "PERSON",
+    "PERSON_NAME",
+    "PLACE_OF_BIRTH",
+    "CITIZENSHIP",
+    "PASSPORT_ISSUER",
+    "ADDRESS",
+    "CARDHOLDER_NAME",
+}
 
 
 class ProcessError(Exception):
@@ -70,12 +78,13 @@ class ProcessService:
                 out.append(f)
         return out
 
-    def _ner_for_system(self, system: Optional[str], need_person: bool) -> bool:
-        """RuBERT only when explicitly enabled for the system (demo).
+    def _ner_for_system(self, system: Optional[str], need_context_ml: bool) -> bool:
+        """Enable ML only when a context-defined PII type is actually needed.
 
-        No X-System (AlfaSonar /process) → always rules-only for RPS.
+        Routing is separate from detection logic: a system may deliberately
+        keep ML off for a compatibility/high-RPS profile.
         """
-        if not need_person:
+        if not need_context_ml:
             return False
         if os.getenv("NER_ENABLED", "0") != "1":
             return False
@@ -91,9 +100,9 @@ class ProcessService:
 
     def detect(self, text: str, system: Optional[str] = None) -> list[Finding]:
         allowed_set = self._allowed_types(system)
-        need_person = allowed_set is None or bool(allowed_set & PERSON_TYPES)
+        need_context_ml = allowed_set is None or bool(allowed_set & CONTEXT_TYPES)
         findings = detect_pii(
-            text, enable_ner=self._ner_for_system(system, need_person)
+            text, enable_ner=self._ner_for_system(system, need_context_ml)
         )
         if allowed_set:
             findings = [
