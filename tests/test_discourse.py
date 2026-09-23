@@ -51,7 +51,7 @@ def test_ner_mid_sentence_banking(monkeypatch):
 
     def fake_detect(text: str) -> list[Finding]:
         full_name = "Дмитрий Орлов" if "Дмитрий Орлов" in text else "Александр Пушкин"
-        first, last = full_name.split()
+        first, _ = full_name.split()
         start = text.index(full_name)
         return [
             Finding("PERSON", start, start + len(first), 0.99, "ml", part="first"),
