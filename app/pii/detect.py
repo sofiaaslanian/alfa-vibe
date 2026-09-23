@@ -177,9 +177,25 @@ def _overlaps(a: Finding, b: Finding) -> bool:
 
 
 def _overlap_union(candidate: Finding, hits: list[Finding]) -> Finding:
+    """Merge overlaps without destroying semantic type unnecessarily.
+
+    Multiple detectors often emit partially overlapping candidates for the
+    same entity (especially composite ADDRESS/PERSON values). Keeping that
+    type lets the structural layer split the accepted object into semantic
+    mask spans. REDACTED_SPAN is reserved for true cross-type conflicts.
+    """
     union_start = min([candidate.start] + [hit.start for hit in hits])
     union_end = max([candidate.end] + [hit.end for hit in hits])
     union_score = min(candidate.score, min(hit.score for hit in hits))
+    types = {candidate.type, *(hit.type for hit in hits)}
+    if len(types) == 1:
+        return Finding(
+            candidate.type,
+            union_start,
+            union_end,
+            union_score,
+            "same_type_overlap_union",
+        )
     return Finding("REDACTED_SPAN", union_start, union_end, union_score, "overlap_union")
 
 
