@@ -184,7 +184,7 @@ Detector functions return a confirmed object span. Composite splitting lives in 
 
 System config decides whether it wants context ML:
 
-- autotest: use_context_ml = false
+- autotest: use_context_ml = true
 - demo: true
 - format_only: false
 - high_rps: false
