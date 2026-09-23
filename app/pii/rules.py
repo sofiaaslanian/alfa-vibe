@@ -360,7 +360,7 @@ ADDRESS_RE = re.compile(
     rf"(?:\s*,\s*|\s+){HOUSE_BIT}{EXTRA_BIT}{APT_BIT}"
 )
 SHORT_ADDRESS_RE = re.compile(
-    rf"(?:дом|д\.)\s*\d+[А-Яа-яA-Za-z]?(?:\s*,\s*|\s+)(?:кв\.|квартира)\s*\d+"
+    r"(?:дом|д\.)\s*\d+[А-Яа-яA-Za-z]?(?:\s*,\s*|\s+)(?:кв\.|квартира)\s*\d+"
 )
 SPOKEN_ADDRESS_RE = re.compile(
     rf"(?:на\s+)?"
@@ -622,7 +622,7 @@ def detect_passport_issue_date(text: str) -> list[Finding]:
 
 # --- passport ---
 PASSPORT_SPLIT_RE = re.compile(
-    r"серия\s+(\d{2}\s?\d{2})\s*,?\s*номер\s+(\d{6})",
+    r"серия\s+(\d{2}\s?\d{2})\s*(?:,\s*)?номер\s+(\d{6})",
     re.IGNORECASE,
 )
 PASSPORT_ANCHORED_RE = re.compile(
@@ -745,7 +745,7 @@ def detect_subdivision(text: str) -> list[Finding]:
 
 # --- driver license ---
 VU_SPLIT_RE = re.compile(
-    r"серия\s+(\d{2}\s\d{2})\s*,?\s*номер\s+(\d{6})",
+    r"серия\s+(\d{2}\s\d{2})\s*(?:,\s*)?номер\s+(\d{6})",
     re.IGNORECASE,
 )
 VU_COMBINED_RE = re.compile(r"(?<!\d)(\d{10}|\d{2}\s\d{2}\s\d{6})(?!\d)")
@@ -1065,7 +1065,7 @@ ISSUER_NEG = [
 def _issuer_label_allowed(text: str, match) -> bool:
     labeled = match.group(0)
     left = _left(text, match.start(), ROLE_WINDOW)
-    bare_issued = re.fullmatch(r"(?i)выдан\s*[:\-—–]?\s*", labeled)
+    bare_issued = re.fullmatch(r"(?i)выдан\s*(?:[:\-—–]\s*)?", labeled)
     if bare_issued and not _has_any(left, [RX_PASSPORT, RX_FORM, r"документ"]):
         return False
     if _has_any(left, ISSUER_NEG):
@@ -1405,7 +1405,7 @@ def _add_role_persons(text: str, out: list[Finding], covered: set[tuple[int, int
 def _add_called_persons(text: str, out: list[Finding], covered: set[tuple[int, int]]) -> None:
     for match in PERSON_CALLED_RE.finditer(text):
         cue = match.group(0)[: match.start(1) - match.start()]
-        from_ya = bool(re.search(r"(?i)(?<![А-ЯЁA-Z0-9])я\s*[:\-—–]?\s*$", cue))
+        from_ya = bool(re.search(r"(?i)(?<![А-ЯЁA-Z0-9])я\s*(?:[:\-—–]\s*)?$", cue))
         _add_person_candidate(
             text,
             out,
@@ -1466,7 +1466,7 @@ def _detect_person_patronymic_candidate(text: str) -> list[Finding]:
             continue
         # Skip company titles «ООО „…“»
         left40 = _left(text, s, 40)
-        if re.search(r"(?i)(?:ооо|ао|пао|зао|ип)\s*[«\"']?\s*$", left40):
+        if re.search(r"(?i)(?:ооо|ао|пао|зао|ип)\s*(?:[«\"']\s*)?$", left40):
             continue
         span = _trim_value_span(text, s, e)
         if not span:
