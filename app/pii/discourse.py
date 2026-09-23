@@ -134,23 +134,44 @@ def should_skip_person(text: str, start: int, end: int) -> bool:
     return not is_personal_person_mention(text, start, end)
 
 
+ADDRESS_STRONG_PERSONAL_RE = re.compile(
+    r"(?i)(?:"
+    r"мой\s+адрес|наш\s+адрес|домашн\w*\s+адрес"
+    r"|адрес\s+(?:проживани|регистрац|клиента|для\s+корреспонденц)"
+    r"|живу|жив[её]м|прожива|прописан|зарегистрирован"
+    r")"
+)
+
+
 def is_personal_address_mention(text: str, start: int, end: int) -> bool:
-    """Personal home/delivery address vs public/service place."""
+    """Personal address vs a public/place locator.
+
+    Address syntax only creates a candidate. Role resolution is separate:
+    explicit personal ownership/KYC wins; otherwise an explicit public/place
+    subject (office, museum, meeting, shop, etc.) suppresses the candidate.
+    Generic locator wording such as "по адресу" is intentionally weak.
+    """
     from app.pii.claims import ADDRESS_PERSONAL_RE, ADDRESS_PUBLIC_RE
 
     left = _left(text, start)
     ctx = _ctx(text, start, end)
     value = text[start:end]
-    personal = bool(ADDRESS_PERSONAL_RE.search(left) or ADDRESS_PERSONAL_RE.search(ctx))
+    strong_personal = bool(
+        ADDRESS_STRONG_PERSONAL_RE.search(left)
+        or ADDRESS_STRONG_PERSONAL_RE.search(ctx)
+    )
     public = bool(ADDRESS_PUBLIC_RE.search(left) or ADDRESS_PUBLIC_RE.search(ctx))
+    personal = bool(ADDRESS_PERSONAL_RE.search(left) or ADDRESS_PERSONAL_RE.search(ctx))
 
-    if public and not personal:
+    if strong_personal:
+        return True
+    if public:
         return False
     if personal:
         return True
     if re.search(r"(?i)адрес", left):
-        return not public
-    # Structured street address without public cue — keep (format-context)
+        return True
+    # Structured street address without an explicit public cue — keep.
     return bool(
         re.search(r"(?i)(?:ул\.|улиц|пр\.|проспект|проезд|пер\.|ш\.|дом|\bд\.)", value)
     )
