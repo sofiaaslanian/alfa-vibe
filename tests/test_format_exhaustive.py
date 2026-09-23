@@ -164,7 +164,7 @@ def test_card_negatives(text):
 def test_format_mix_chat_style():
     inn = "123456789047"
     text = (
-        f"привет, пиши на sofia@gmail.com или звони +7 916 123-45-67, "
+        "привет, пиши на sofia@gmail.com или звони +7 916 123-45-67, "
         f"инн если надо {inn}, карта 4111 1111 1111 1111"
     )
     types = {f.type for f in detect_pii(text, enable_ner=False)}

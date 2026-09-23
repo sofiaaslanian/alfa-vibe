@@ -100,14 +100,14 @@ STORAGE_BACKEND=memory NER_ENABLED=0 uvicorn app.main:app --port 8080 &
 Что **только на RU**:
 - `load_smoke.py --url https://<host> --n 2000 --concurrency 100`
 - `load_smoke.py --url https://<host> --profile 100k ...`
-- вписать цифры в слайд/README
+- измеренный прогон Selectel, 23.09.2026, 4 ядра без GPU: при цели 1000 RPS успешных около 960–970, p95 успешных около 8 мс. 2000 RPS на этой машине не достигнуты. Текст около 480 тысяч символов вернул 200 за 1,9 с.
 
 ## Метрики и нагрузка
 
 - Prometheus: `GET /metrics` (Latency / RPS / TPS)
 - Ready: `GET /ready` (проверка state store)
 - ML для **demo/proxy**: `CONTEXT_ML_ENABLED=1` + `use_context_ml: true` (RuBERT ∪ точные rules → discourse)
-- `/process` / `autotest`: hybrid ML + rules; `high_rps`: rules-only профиль для отдельной нагрузки
+- `/process` и профиль `autotest`: rules-only, чтобы уложиться в задержку автотеста. `demo`: контекстный ML включён. `high_rps`: rules-only.
 - ФИО без NER (load): поля `ФИО:` / роль `Клиент Имя Фамилия`
 - Локальный smoke нагрузки:
   ```bash
@@ -136,6 +136,10 @@ STORAGE_BACKEND=memory NER_ENABLED=0 uvicorn app.main:app --port 8080 &
 | [`docs/acceptance_cases.json`](docs/acceptance_cases.json) | 68 кейсов |
 | [`docs/holdout_cases.json`](docs/holdout_cases.json) | независимый holdout |
 | [`docs/HACKATHON_BRIEF.md`](docs/HACKATHON_BRIEF.md) | критерии жюри |
+
+## Инструменты
+
+До подключения Kilo Code часть подготовки сделана в ChatGPT и Cursor: разбор ТЗ, обсуждение архитектуры и первые черновики. На брифинге внешние модели допускались. Доступ к DeepSeek v.4 Flash в контуре AlfaGen появился поздно ночью, день до этого ушёл на подключение вместе с техническим специалистом. Со второго дня работа идёт в VS Code + Kilo Code + эта модель. Объём ранней внешней работы в токенах и процентах не измеряли. Организаторы разрешили сдавать текущее решение при таком указании.
 
 ## Структура
 

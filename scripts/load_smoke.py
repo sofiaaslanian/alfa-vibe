@@ -147,7 +147,7 @@ def main():
     )
     print(
         f"payload_chars={len(payload)} approx_tokens={approx_tokens} "
-        f"(tokenizer=chars/4 heuristic)"
+        "(tokenizer=chars/4 heuristic)"
     )
     print(f"wall={total:.3f}s  RPS≈{rps:.1f}  TPS≈{tps:.0f}")
     print(

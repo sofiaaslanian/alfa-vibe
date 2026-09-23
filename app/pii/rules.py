@@ -352,32 +352,32 @@ EXTRA_BIT = r"(?:(?:\s*,\s*|\s+)(?:стр\.|строен\w*|корп\.|корп�
 APT_BIT = r"(?:(?:\s*,\s*|\s+)(?:кв\.|квартира)\s*\d+)?"
 CITY_BIT = r"(?:(?:г\.|город)\s*)?[А-ЯЁ][А-Яа-яЁёA-Za-z\-]+"
 STREET_BIT = (
-    rf"(?:"
+    r"(?:"
     rf"{STREET_TYPE}\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
-    rf"|"
+    r"|"
     rf"[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+{STREET_TYPE}"
-    rf")"
+    r")"
 )
 # «Волгоградский проспект» / «Волгоградском проспекте» — must start with CAPITAL
 NAMED_STREET = (
-    rf"(?<![А-Яа-яЁёA-Za-z])"
-    rf"[А-ЯЁ][а-яё\-]+(?:[аяоеуюыий]|ом|ем|ой|ей|ую)?"
-    rf"(?:\s+[А-Яа-яЁё\-]+){{0,2}}"
+    r"(?<![А-Яа-яЁёA-Za-z])"
+    r"[А-ЯЁ][а-яё\-]+(?:[аяоеуюыий]|ом|ем|ой|ей|ую)?"
+    r"(?:\s+[А-Яа-яЁё\-]+){{0,2}}"
     rf"\s+{STREET_TYPE}"
 )
 
 ADDRESS_RE = re.compile(
     rf"(?:\d{{6}}\s*,\s*)?{CITY_BIT}\s*,\s*{STREET_BIT}"
     rf"(?:\s*,\s*|\s+){HOUSE_BIT}{EXTRA_BIT}{APT_BIT}"
-    rf"|"
+    r"|"
     rf"{STREET_TYPE}\s+[А-ЯЁа-яёA-Za-z0-9\-\.\s]+?"
     rf"(?:\s*,\s*|\s+){HOUSE_BIT}{EXTRA_BIT}{APT_BIT}"
 )
 SHORT_ADDRESS_RE = re.compile(
-    rf"(?:дом|д\.)\s*\d+[А-Яа-яA-Za-z]?(?:\s*,\s*|\s+)(?:кв\.|квартира)\s*\d+"
+    r"(?:дом|д\.)\s*\d+[А-Яа-яA-Za-z]?(?:\s*,\s*|\s+)(?:кв\.|квартира)\s*\d+"
 )
 SPOKEN_ADDRESS_RE = re.compile(
-    rf"(?:на\s+)?"
+    r"(?:на\s+)?"
     rf"(?:{NAMED_STREET}|{STREET_BIT})"
     rf"(?:\s*,\s*|\s+){HOUSE_BARE}"
     rf"{EXTRA_BIT}{APT_BIT}"
@@ -526,11 +526,11 @@ _DATE_MM = r"(?:0?[1-9]|1[0-2])"
 _DATE_YYYY = r"(?:19|20)\d{2}"
 _DATE_SEP = r"[./\-]"
 DATE_NUM_RE = re.compile(
-    rf"(?<!\d)(?:"
+    r"(?<!\d)(?:"
     rf"{_DATE_DD}{_DATE_SEP}{_DATE_MM}{_DATE_SEP}{_DATE_YYYY}"
-    rf"|"
+    r"|"
     rf"{_DATE_YYYY}{_DATE_SEP}{_DATE_MM}{_DATE_SEP}{_DATE_DD}"
-    rf")(?!\d)"
+    r")(?!\d)"
 )
 MONTHS = (
     r"января|февраля|марта|апреля|мая|июня|июля|августа|"
@@ -1210,28 +1210,28 @@ _PERSON_ROLE_WORD = (
     r"заёмщик\w*|заемщик\w*|вкладчик\w*"
 )
 PERSON_CLIENT_RE = re.compile(
-    rf"(?<![А-Яа-яЁёA-Za-z])"
+    r"(?<![А-Яа-яЁёA-Za-z])"
     rf"(?i:{_PERSON_ROLE_WORD})"
-    rf"\s*[:\-—–]?\s*"
-    rf"[«\"']?\s*"
+    r"\s*[:\-—–]?\s*"
+    r"[«\"']?\s*"
     rf"({_RU_FIO_2_3}|{_LAT_FIO})"
-    rf"\s*[»\"']?"
-    rf"(?=[\s,.;:!?»\"']|$)"
+    r"\s*[»\"']?"
+    r"(?=[\s,.;:!?»\"']|$)"
 )
 # Free-text contact: capitalised name(s)
 PERSON_CONTACT_RE = re.compile(
-    rf"(?<![А-Яа-яЁёA-Za-z])"
-    rf"(?i:"
-    rf"свяжит(?:есь|еся)\s+с"
-    rf"|свяжись\s+с"
-    rf"|напиш(?:и|ите)\s+(?:письмо\s+)?(?:для\s+)?"
-    rf"|письмо\s+(?:для\s+)?"
-    rf"|позвонит(?:е|ь)\s+(?:клиент\w*\s+)?"
-    rf"|передайте\s+"
-    rf")"
-    rf"\s*"
+    r"(?<![А-Яа-яЁёA-Za-z])"
+    r"(?i:"
+    r"свяжит(?:есь|еся)\s+с"
+    r"|свяжись\s+с"
+    r"|напиш(?:и|ите)\s+(?:письмо\s+)?(?:для\s+)?"
+    r"|письмо\s+(?:для\s+)?"
+    r"|позвонит(?:е|ь)\s+(?:клиент\w*\s+)?"
+    r"|передайте\s+"
+    r")"
+    r"\s*"
     rf"({_RU_FIO_1_3})"
-    rf"(?=[\s,.;:!?»\"']|$)"
+    r"(?=[\s,.;:!?»\"']|$)"
 )
 
 # Import shared typo-tolerant self-ID cues — used below
@@ -1239,22 +1239,22 @@ PERSON_CONTACT_RE = re.compile(
 
 PERSON_CALLED_RE = re.compile(
     rf"(?i:{PERSON_SELF_CUE_FOR_RULES})"
-    rf"\s*[:\-—–]?\s+"
+    r"\s*[:\-—–]?\s+"
     rf"({_RU_FIO_1_3_LOOSE})"
-    rf"(?=[\s,.;:!?»\"']|$)"
+    r"(?=[\s,.;:!?»\"']|$)"
 )
 # Spoken / inverted: «Ваня Дмитриенко меня зовут» (+ typos)
 PERSON_CALLED_FRONT_RE = re.compile(
-    rf"(?<![А-Яа-яЁёA-Za-z])"
+    r"(?<![А-Яа-яЁёA-Za-z])"
     rf"({_RU_FIO_LOOSE})"
-    rf"\s*[,.!?…]?\s*"
+    r"\s*[,.!?…]?\s*"
     rf"(?i:{PERSON_SELF_CUE_FRONT_FOR_RULES})"
-    rf"(?=[\s,.;:!?»\"']|$)"
+    r"(?=[\s,.;:!?»\"']|$)"
 )# Lead FIO + banking action without «клиент» label
 PERSON_BANKING_LEAD_RE = re.compile(
-    rf"(?:^|(?<=[.!?…\n]\s)|(?<=\n))"
+    r"(?:^|(?<=[.!?…\n]\s)|(?<=\n))"
     rf"({_RU_FIO_2_3})"
-    rf"(?=[\s,.;:!?»\"']|$)"
+    r"(?=[\s,.;:!?»\"']|$)"
 )
 PERSON_JSON_CUSTOMER_RE = re.compile(
     r'"customer"\s*:\s*\{[^{}]*?"name"\s*:\s*"([^"]+)"',
@@ -1472,12 +1472,12 @@ def detect_person_labelled(text: str) -> list[Finding]:
 # ONLY emits candidates — discourse gate decides personal vs third-party.
 _PATRONYMIC = r"(?:ич(?:а|у|ем|е)?|вн(?:а|ы|е|у|ой)|ичн(?:а|ы|е|у|ой))"
 PERSON_PATRONYMIC_RE = re.compile(
-    rf"(?:^|[^\wА-Яа-яЁё])"
-    rf"("
+    r"(?:^|[^\wА-Яа-яЁё])"
+    r"("
     rf"(?:{_RU_NAME}(?:-{_RU_NAME})?\s+{_RU_NAME}\s+{_RU_NAME}{_PATRONYMIC})"
     rf"|(?:{_RU_NAME}\s+{_RU_NAME}{_PATRONYMIC}\s+{_RU_NAME}(?:-{_RU_NAME})?)"
-    rf")"
-    rf"(?:[^\wА-Яа-яЁё]|$)"
+    r")"
+    r"(?:[^\wА-Яа-яЁё]|$)"
 )
 
 

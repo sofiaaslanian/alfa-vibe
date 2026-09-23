@@ -26,20 +26,20 @@ SELF_ID_BEFORE_PATTERNS: tuple[str, ...] = (
     rf"{_ZOVUT}\s+{_MENYA}",
     rf"{_MOE}\s+{_IMYA}",
     rf"это\s+{_MOE}\s+{_IMYA}",
-    rf"представл(?:юсь|яюсь|ение)",
-    rf"разрешите\s+представ",
-    rf"знаком(?:ьтесь|ство)[,:]?\s*я",
-    rf"я\s+[-—–]",
-    rf"я\s+(?:есть|являюсь)",
-    rf"(?<![А-Яа-яЁёA-Za-z0-9])я",
-    rf"мо[яей]\s+фамил",
-    rf"мо[её]\s+отчеств",
+    r"представл(?:юсь|яюсь|ение)",
+    r"разрешите\s+представ",
+    r"знаком(?:ьтесь|ство)[,:]?\s*я",
+    r"я\s+[-—–]",
+    r"я\s+(?:есть|являюсь)",
+    r"(?<![А-Яа-яЁёA-Za-z0-9])я",
+    r"мо[яей]\s+фамил",
+    r"мо[её]\s+отчеств",
     rf"{_KLIENT}\s+{_ZOVUT}",
     rf"{_ZOVUT}\s+{_KLIENT}",
     rf"{_USER}\s+{_ZOVUT}",
     rf"имя\s+{_KLIENT}",
-    rf"пишите\s+(?:мне\s+)?(?:как|на\s+имя)",
-    rf"обраща(?:йтесь|юсь)\s+(?:ко?\s+мне\s+)?как",
+    r"пишите\s+(?:мне\s+)?(?:как|на\s+имя)",
+    r"обраща(?:йтесь|юсь)\s+(?:ко?\s+мне\s+)?как",
 )
 
 # Claim AFTER the name («X меня зовут»)
@@ -89,7 +89,7 @@ SELF_ID_AFTER_RE = re.compile(
 KYC_FIELD_RE = re.compile(rf"(?i){_or_group(KYC_FIELD_PATTERNS)}.{{0,80}}$")
 CLIENT_ROLE_RE = re.compile(
     rf"(?i)(?<![А-Яа-яЁёA-Za-z]){_or_group(CLIENT_ROLE_PATTERNS)}"
-    rf"\s*[:\-—–]?\s*[«\"']?\s*$"
+    r"\s*[:\-—–]?\s*[«\"']?\s*$"
 )
 
 # Cue used inside person detector regexes (name AFTER cue)

@@ -28,7 +28,7 @@ def _key_from_env(name: str) -> bytes:
         ) != "1":
             raise RuntimeError(
                 f"{name} must be a strong secret when STORAGE_BACKEND=redis "
-                f"(got empty/placeholder). Set ALLOW_WEAK_STATE_KEYS=1 only for local demos."
+                "(got empty/placeholder). Set ALLOW_WEAK_STATE_KEYS=1 only for local demos."
             )
         # ephemeral for local/dev memory store
         return hashlib.sha256(f"dev-{name}".encode()).digest()

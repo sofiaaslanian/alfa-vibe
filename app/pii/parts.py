@@ -29,21 +29,21 @@ _ADDR_STREET_TYPE = (
     r"наб\.|набережн(?:ая|ой)|пл\.|площад(?:ь|и))"
 )
 _ADDR_STREET_RE = re.compile(
-    rf"("
+    r"("
     rf"(?i:{_ADDR_STREET_TYPE})\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
-    rf"|"
+    r"|"
     rf"[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+(?i:{_ADDR_STREET_TYPE})"
-    rf")"
+    r")"
 )
 _ADDR_HOUSE_RE = re.compile(r"(?i)((?:д\.|дом)\s*\d+[А-ЯA-Z]?)")
 # Spoken / natural address: "на улице Ленина 5", "Невский проспект 20".
 # The address role has already been validated upstream; here we only extract
 # the semantic house value, not the street label.
 _ADDR_BARE_HOUSE_RE = re.compile(
-    rf"(?:"
+    r"(?:"
     rf"(?i:{_ADDR_STREET_TYPE})\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
     rf"|[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+(?i:{_ADDR_STREET_TYPE})"
-    rf")\s+(\d+[А-ЯA-Z]?)"
+    r")\s+(\d+[А-ЯA-Z]?)"
 )
 _ADDR_FLAT_RE = re.compile(r"(?i)((?:кв\.|квартира)\s*\d+)")
 _ADDR_CORP_RE = re.compile(r"(?i)((?:корп\.|корпус|стр\.|строен\w*)\s*\d+[А-ЯA-Z]?)")
