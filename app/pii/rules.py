@@ -183,23 +183,18 @@ def _email_candidate(text: str, match) -> Finding | None:
     value = match.group(1)
     if _email_is_malformed(value):
         return None
-
     local, _, domain = value.partition("@")
-    local_l = local.lower()
-    domain_l = domain.lower()
+    local_l, domain_l = local.lower(), domain.lower()
     left = _left(text, match.start(), ROLE_WINDOW)
     personal = _has_any(left, EMAIL_PERSONAL_CUES)
     service = _email_is_service(local_l, domain_l)
-
     if _neg_wins(left, EMAIL_NEG_ROLES, EMAIL_PERSONAL_CUES):
         return None
     if service and not personal:
         return None
-
     service_negatives = EMAIL_NEG_ROLES + [r"поддержк", r"merchant"]
     if service and _neg_wins(left, service_negatives, EMAIL_PERSONAL_CUES):
         return None
-
     explicit_email = _has_any(
         left,
         [r"\bemail\b", r"e-?mail", r"почт", r"мейл", r"mail"],
@@ -214,6 +209,48 @@ def detect_email(text: str) -> list[Finding]:
         for match in EMAIL_RE.finditer(text)
         if (finding := _email_candidate(text, match)) is not None
     ]
+
+# --- phone ---
+# RU default: +7 / 8 / 7 + 10 digits. Separators: space, dash, dot, (), NBSP.
+# International: +CC… with 10–15 digits total (E.164), but only when explicit '+'.
+PHONE_RU_RE = re.compile(
+    r"(?<!\d)"
+    r"(?:"
+    r"\+7|8|7"
+    r")"
+    r"(?:[\s\-\.\u00a0\u202f]*\(?[\s\-\.\u00a0\u202f]*\d{3}[\s\-\.\u00a0\u202f]*\)?"
+    r"[\s\-\.\u00a0\u202f]*\d{3}[\s\-\.\u00a0\u202f]*\d{2}[\s\-\.\u00a0\u202f]*\d{2})"
+    r"(?!\d)"
+)
+PHONE_INTL_RE = re.compile(
+    r"(?<!\d)"
+    r"\+[1-9]\d{0,2}"
+    r"(?:[\s\-\.\u00a0\u202f]*\(?\d{1,4}\)?)+"
+    r"(?!\d)"
+)
+PHONE_NEG_ROLES = [
+    r"колл[\-\s]?центр",
+    r"call[\-\s]?center",
+    r"горяч\w*\s+лин",
+    r"телефон\s+поддержк",
+    r"служб\w*\s+поддержк",
+    r"поддержк\w*\s+альфа",
+    r"альфа[\-\s]?банк\w*\s+(?:поддерж|телефон|лин)",
+    r"телефон\s+офис",
+    r"телефон\s+отделен",
+    r"телефон\s+банка",
+    r"контакт[- ]?центр",
+    RX_NUMBER_ORDER,
+    r"заказ[ае]?\s*№",
+    r"заказ[аеу]?\s+\d",
+    r"заказ[аеу]?\s*$",
+    r"номер\s+заявк",
+    RX_ARTICLE,
+    r"идентификатор\s+транзак",
+    r"tracking",
+    r"трек[\-\s]?номер",
+]
+
 
 def _normalize_ru_phone_digits(raw: str) -> str | None:
     digits = _digits_only(raw)
@@ -380,7 +417,6 @@ def _address_match_span(text: str, regex, match) -> tuple[int, int] | None:
     left = _left(text, match.start(), ROLE_WINDOW)
     if _has_any(left, ADDRESS_NEG):
         return None
-
     structured = regex is ADDRESS_RE
     address_context = re.search(
         r"(?i)адрес",
@@ -390,20 +426,16 @@ def _address_match_span(text: str, regex, match) -> tuple[int, int] | None:
         return None
     if _has_any(_right(text, match.end(), 45), [r"не\s+мой\s+адрес"]):
         return None
-
     span = _trim_value_span(text, match.start(), match.end())
     if not span:
         return None
     start, end = span
     if text[start:end].lower().startswith("на "):
-        span = _trim_value_span(text, start + 3, end)
+        return _trim_value_span(text, start + 3, end)
     return span
 
 
-def _span_is_nested(
-    span: tuple[int, int],
-    seen: set[tuple[int, int]],
-) -> bool:
+def _span_is_nested(span: tuple[int, int], seen: set[tuple[int, int]]) -> bool:
     return any(
         old_start <= span[0] and span[1] <= old_end and (old_start, old_end) != span
         for old_start, old_end in seen
@@ -532,16 +564,13 @@ DATE_ROLE_LABELS = {
 
 def _birth_date_is_template_example(text: str, start: int) -> bool:
     left = _left(text, start, 100)
-    example = _has_any(left, [RX_EXAMPLE, r"шаблон"])
-    form = _has_any(left, [RX_FORM, r"заполнен", RX_FORMAT])
-    return example and form
+    return _has_any(left, [RX_EXAMPLE, r"шаблон"]) and _has_any(
+        left,
+        [RX_FORM, r"заполнен", RX_FORMAT],
+    )
 
 
-def _role_date_span(
-    text: str,
-    match,
-    want_role: str,
-) -> tuple[int, int] | None:
+def _role_date_span(text: str, match, want_role: str) -> tuple[int, int] | None:
     role = _nearest_label(text, match.start(), DATE_ROLE_LABELS, max_dist=60)
     if role != want_role:
         return None
@@ -621,15 +650,7 @@ def _passport_split_candidates(
         left = _left(text, match.start(), 50)
         if not _has_any(ctx, PASSPORT_POS) or _has_any(left, PASSPORT_NEG):
             continue
-        out.append(
-            Finding(
-                "PASSPORT",
-                match.start(1),
-                match.end(2),
-                0.96,
-                "passport_rule_v1",
-            )
-        )
+        out.append(Finding("PASSPORT", match.start(1), match.end(2), 0.96, "passport_rule_v1"))
         covered.add((match.start(), match.end()))
     return out
 
@@ -640,21 +661,11 @@ def _passport_anchored_candidates(
 ) -> list[Finding]:
     out: list[Finding] = []
     for match in PASSPORT_ANCHORED_RE.finditer(text):
-        if _overlaps_covered(match, covered):
-            continue
         left = _left(text, match.start(), 55)
         digits = _digits_only(match.group(1) + match.group(2))
-        if _has_any(left, PASSPORT_NEG) or len(digits) != 10:
+        if _overlaps_covered(match, covered) or _has_any(left, PASSPORT_NEG) or len(digits) != 10:
             continue
-        out.append(
-            Finding(
-                "PASSPORT",
-                match.start(1),
-                match.end(2),
-                0.96,
-                "passport_anchored_v1",
-            )
-        )
+        out.append(Finding("PASSPORT", match.start(1), match.end(2), 0.96, "passport_anchored_v1"))
         covered.add((match.start(), match.end()))
     return out
 
@@ -676,15 +687,7 @@ def _passport_combined_candidates(
         blocked = _overlaps_covered(match, covered) or _has_any(left, PASSPORT_NEG)
         if blocked or not _combined_passport_has_role(text, match) or len(digits) != 10:
             continue
-        out.append(
-            Finding(
-                "PASSPORT",
-                match.start(1),
-                match.end(1),
-                0.96,
-                "passport_rule_v1",
-            )
-        )
+        out.append(Finding("PASSPORT", match.start(1), match.end(1), 0.96, "passport_rule_v1"))
     return out
 
 
@@ -1071,12 +1074,8 @@ def _issuer_span(text: str, match) -> tuple[int, int] | None:
     span = _trim_value_span(text, value_match.start(), value_match.end())
     if not span:
         return None
-
     ctx = _window(text, span[0], span[1], ROLE_WINDOW)
-    positive = _has_any(
-        ctx,
-        [r"паспорт\s+выдан", r"кем\s+выдан", r"орган\s+выдач"],
-    )
+    positive = _has_any(ctx, [r"паспорт\s+выдан", r"кем\s+выдан", r"орган\s+выдач"])
     if _has_any(ctx, ISSUER_NEG) and not positive:
         return None
     return span
@@ -1087,16 +1086,35 @@ def detect_passport_issuer(text: str) -> list[Finding]:
     for match in ISSUER_LABEL_RE.finditer(text):
         span = _issuer_span(text, match)
         if span:
-            out.append(
-                Finding(
-                    "PASSPORT_ISSUER",
-                    span[0],
-                    span[1],
-                    0.94,
-                    "passport_issuer_rule_v2",
-                )
-            )
+            out.append(Finding("PASSPORT_ISSUER", span[0], span[1], 0.94, "passport_issuer_rule_v2"))
     return out
+
+# --- cardholder ---
+CARDHOLDER_LABEL_RE = re.compile(
+    r"(?:"
+    r"имя\s+держателя\s+карты"
+    r"|держател\w*\s+карты"
+    r"|имя\s+на\s+карт\w*"
+    r"|embossed\s+name"
+    r"|name\s+on\s+card"
+    r"|cardholder(?!\s+company)(?:\s+name)?"
+    r")"
+    r"\s*[:\-—–]?\s*",
+    re.IGNORECASE,
+)
+CARDHOLDER_VALUE_RE = re.compile(rf"(?:{_LAT_FIO}|{_RU_FIO_2_3})")
+CARDHOLDER_NEG = [
+    r"докладчик",
+    r"спикер",
+    r"автор",
+    r"поэт",
+    r"писател",
+    r"company",
+    r"компани",
+    r"организац",
+    r"модератор",
+]
+
 
 def _detect_cardholder_name_candidate(text: str) -> list[Finding]:
     out: list[Finding] = []
@@ -1313,9 +1331,7 @@ def _person_span_candidate(
     start, end = trimmed
     if from_ya and _ya_stopword_span(text, start, end):
         return None
-    if _has_any(_left(text, start, 40), PERSON_NEG):
-        return None
-    if _person_cultural_block(text, start, end):
+    if _has_any(_left(text, start, 40), PERSON_NEG) or _person_cultural_block(text, start, end):
         return None
     return _trim_value_span(text, start, end)
 
@@ -1331,11 +1347,7 @@ def _add_person_candidate(
     *,
     from_ya: bool = False,
 ) -> None:
-    overlaps = any(
-        not (end <= old_start or start >= old_end)
-        for old_start, old_end in covered
-    )
-    if overlaps:
+    if any(not (end <= old_start or start >= old_end) for old_start, old_end in covered):
         return
     span = _person_span_candidate(text, start, end, from_ya=from_ya)
     if not span:
@@ -1344,11 +1356,7 @@ def _add_person_candidate(
     out.append(Finding("PERSON", span[0], span[1], score, detector))
 
 
-def _add_labeled_persons(
-    text: str,
-    out: list[Finding],
-    covered: set[tuple[int, int]],
-) -> None:
+def _add_labeled_persons(text: str, out: list[Finding], covered: set[tuple[int, int]]) -> None:
     for match in PERSON_LABEL_RE.finditer(text):
         value_match = PERSON_VALUE_RE.match(text[match.end() :])
         if value_match:
@@ -1362,50 +1370,23 @@ def _add_labeled_persons(
                 "person_label_rule_v2",
             )
     for match in PERSON_JSON_CUSTOMER_RE.finditer(text):
-        _add_person_candidate(
-            text,
-            out,
-            covered,
-            match.start(1),
-            match.end(1),
-            0.95,
-            "person_json_customer_v2",
-        )
+        _add_person_candidate(text, out, covered, match.start(1), match.end(1), 0.95, "person_json_customer_v2")
 
 
-def _add_role_persons(
-    text: str,
-    out: list[Finding],
-    covered: set[tuple[int, int]],
-) -> None:
-    role_patterns = (
+def _add_role_persons(text: str, out: list[Finding], covered: set[tuple[int, int]]) -> None:
+    for regex, score, detector in (
         (PERSON_CLIENT_RE, 0.9, "person_role_rule_v2"),
         (PERSON_CONTACT_RE, 0.88, "person_contact_rule_v2"),
         (PERSON_CALLED_FRONT_RE, 0.92, "person_called_front_rule_v2"),
-    )
-    for regex, score, detector in role_patterns:
+    ):
         for match in regex.finditer(text):
-            _add_person_candidate(
-                text,
-                out,
-                covered,
-                match.start(1),
-                match.end(1),
-                score,
-                detector,
-            )
+            _add_person_candidate(text, out, covered, match.start(1), match.end(1), score, detector)
 
 
-def _add_called_persons(
-    text: str,
-    out: list[Finding],
-    covered: set[tuple[int, int]],
-) -> None:
+def _add_called_persons(text: str, out: list[Finding], covered: set[tuple[int, int]]) -> None:
     for match in PERSON_CALLED_RE.finditer(text):
         cue = match.group(0)[: match.start(1) - match.start()]
-        from_ya = bool(
-            re.search(r"(?i)(?<![А-Яа-яЁёA-Za-z0-9])я\s*[:\-—–]?\s*$", cue)
-        )
+        from_ya = bool(re.search(r"(?i)(?<![А-Яа-яЁёA-Za-z0-9])я\s*[:\-—–]?\s*$", cue))
         _add_person_candidate(
             text,
             out,
@@ -1418,25 +1399,12 @@ def _add_called_persons(
         )
 
 
-def _add_banking_lead_persons(
-    text: str,
-    out: list[Finding],
-    covered: set[tuple[int, int]],
-) -> None:
+def _add_banking_lead_persons(text: str, out: list[Finding], covered: set[tuple[int, int]]) -> None:
     from app.pii.claims import has_banking_intent
-
     if not has_banking_intent(text, include_generic=False):
         return
     for match in PERSON_BANKING_LEAD_RE.finditer(text):
-        _add_person_candidate(
-            text,
-            out,
-            covered,
-            match.start(1),
-            match.end(1),
-            0.85,
-            "person_banking_lead_v2",
-        )
+        _add_person_candidate(text, out, covered, match.start(1), match.end(1), 0.85, "person_banking_lead_v2")
 
 
 def _detect_person_labelled_candidate(text: str) -> list[Finding]:
