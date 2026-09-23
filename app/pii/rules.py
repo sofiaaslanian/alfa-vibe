@@ -411,6 +411,21 @@ ADDRESS_NEG = [
     r"склад",
 ]
 
+PERSONAL_CITY_BEFORE_STREET_RE = re.compile(
+    r"(?i:живу|жив[её]м|проживаю|проживаем|прописан(?:а)?|зарегистрирован(?:а)?)"
+    r"\s+в\s+"
+    r"(?P<city>[А-ЯЁ][А-Яа-яЁё\-]+(?:\s+[А-ЯЁ][А-Яа-яЁё\-]+){0,2})"
+    r"\s+на\s*$"
+)
+
+
+def _personal_city_prefix_start(text: str, street_start: int) -> int:
+    left = _left(text, street_start, ROLE_WINDOW)
+    match = PERSONAL_CITY_BEFORE_STREET_RE.search(left)
+    if not match:
+        return street_start
+    return street_start - len(left) + match.start("city")
+
 
 
 def _address_match_span(text: str, regex, match) -> tuple[int, int] | None:
@@ -431,8 +446,12 @@ def _address_match_span(text: str, regex, match) -> tuple[int, int] | None:
         return None
     start, end = span
     if text[start:end].lower().startswith("на "):
-        return _trim_value_span(text, start + 3, end)
-    return span
+        trimmed = _trim_value_span(text, start + 3, end)
+        if not trimmed:
+            return None
+        start, end = trimmed
+    start = _personal_city_prefix_start(text, start)
+    return start, end
 
 
 def _span_is_nested(span: tuple[int, int], seen: set[tuple[int, int]]) -> bool:
