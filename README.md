@@ -71,7 +71,7 @@ curl -s localhost:8080/proxy/chat \
 
 | Система | Типы | demask | NER | Назначение |
 |---|---|---|---|---|
-| `autotest` | все | да | **RuBERT + rules** | `/process` evaluator |
+| `autotest` | все | да | нет, rules-only | `/process` evaluator |
 | `demo` | все + combo PIN/CVV↔карта | да | **RuBERT** | proxy / UI / ловушки |
 | `format_only` | email/phone/INN/card | нет | нет | урезанный consumer |
 | `high_rps` | все 17 типов | да | нет | нагрузка без ML |
