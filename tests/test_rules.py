@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.pii.detect import detect_pii
 from app.pii import rules
+from app.pii.structural import normalize_structures
 
 
 def test_email_positive():
@@ -61,7 +62,7 @@ def test_pipeline_format_mix():
 def test_passport_context():
     # labelled series/number → two digit spans (no «номер» service word)
     text = "Паспорт клиента: серия 4510, номер 123456"
-    f = rules.detect_passport(text)
+    f = normalize_structures(text, rules.detect_passport(text))
     assert len(f) >= 2
     vals = {text[x.start : x.end] for x in f}
     assert "4510" in vals
