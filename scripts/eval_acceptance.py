@@ -98,6 +98,54 @@ def _alnum_offsets(text: str, start: int, end: int, *, typ: str = "") -> set[int
     return need
 
 
+def _cover_expected_composites(
+    text: str,
+    fn_candidates: set[tuple[str, int, int]],
+    fp_candidates: set[tuple[str, int, int]],
+) -> tuple[list[tuple[str, int, int]], set[tuple[str, int, int]], list[tuple[str, int, int]]]:
+    still_fn: list[tuple[str, int, int]] = []
+    covered_got: set[tuple[str, int, int]] = set()
+    promoted_tp: list[tuple[str, int, int]] = []
+    for typ, start, end in sorted(fn_candidates):
+        need = _alnum_offsets(text, start, end, typ=typ)
+        parts = [
+            got
+            for got in fp_candidates
+            if got[0] == typ and got[1] >= start and got[2] <= end
+        ]
+        covered = set().union(
+            *(_alnum_offsets(text, part_start, part_end, typ=typ)
+              for _, part_start, part_end in parts)
+        ) if parts else set()
+        is_covered = typ in COMPOSITE_ACCEPT and bool(need) and need <= covered
+        if is_covered:
+            promoted_tp.append((typ, start, end))
+            covered_got.update(parts)
+        else:
+            still_fn.append((typ, start, end))
+    return still_fn, covered_got, promoted_tp
+
+
+def _remaining_false_positives(
+    expected: list[tuple[str, int, int]],
+    fp_candidates: set[tuple[str, int, int]],
+    covered_got: set[tuple[str, int, int]],
+) -> list[tuple[str, int, int]]:
+    out: list[tuple[str, int, int]] = []
+    for finding in sorted(fp_candidates - covered_got):
+        typ, start, end = finding
+        inside_expected = (
+            typ in COMPOSITE_ACCEPT
+            and any(
+                exp_type == typ and start >= exp_start and end <= exp_end
+                for exp_type, exp_start, exp_end in expected
+            )
+        )
+        if not inside_expected:
+            out.append(finding)
+    return out
+
+
 def match_spans(
     text: str,
     expected: list[tuple[str, int, int]],
@@ -107,49 +155,16 @@ def match_spans(
     exp_set = set(expected)
     got_set = set(got)
     tp = sorted(exp_set & got_set)
-    fp_cand = got_set - exp_set
-    fn_cand = exp_set - got_set
+    fp_candidates = got_set - exp_set
+    fn_candidates = exp_set - got_set
 
-    # Cover remaining expected composite spans by got parts of same type
-    still_fn: list[tuple[str, int, int]] = []
-    covered_got: set[tuple[str, int, int]] = set()
-    for typ, s, e in sorted(fn_cand):
-        if typ not in COMPOSITE_ACCEPT:
-            still_fn.append((typ, s, e))
-            continue
-        need = _alnum_offsets(text, s, e, typ=typ)
-        if not need:
-            still_fn.append((typ, s, e))
-            continue
-        parts = [
-            g
-            for g in fp_cand
-            if g[0] == typ and g[1] >= s and g[2] <= e
-        ]
-        covered = set()
-        for _, gs, ge in parts:
-            covered |= _alnum_offsets(text, gs, ge, typ=typ)
-        if need <= covered:
-            tp.append((typ, s, e))
-            covered_got.update(parts)
-        else:
-            still_fn.append((typ, s, e))
-
-    still_fp: list[tuple[str, int, int]] = []
-    for g in sorted(fp_cand):
-        if g in covered_got:
-            continue
-        typ, gs, ge = g
-        if typ not in COMPOSITE_ACCEPT:
-            still_fp.append(g)
-            continue
-        # Part inside some expected composite span of same type → OK
-        if any(
-            e[0] == typ and gs >= e[1] and ge <= e[2] for e in expected
-        ):
-            continue
-        still_fp.append(g)
-
+    still_fn, covered_got, promoted_tp = _cover_expected_composites(
+        text,
+        fn_candidates,
+        fp_candidates,
+    )
+    tp.extend(promoted_tp)
+    still_fp = _remaining_false_positives(expected, fp_candidates, covered_got)
     return sorted(set(tp)), still_fp, still_fn
 
 
@@ -375,105 +390,124 @@ def http_process_throughput(url: str, n: int, concurrency: int) -> dict | None:
     }
 
 
-def main() -> None:
-    data = json.loads(CASES_PATH.read_text(encoding="utf-8"))
-    cases = data["cases"]
-    assert len(cases) == 68, f"expected 68 cases, got {len(cases)}"
-
-    enable_ner = os.getenv("NER_ENABLED", "1") == "1"
-    print(f"Running {len(cases)} cases NER_ENABLED={enable_ner} ...", flush=True)
-
-    # Warm NER once
+def _run_cases(cases: list[dict], enable_ner: bool) -> list[dict]:
     if enable_ner:
         print("Warming NER model...", flush=True)
         detect_pii("ФИО клиента: Иванов Иван Иванович", enable_ner=True)
 
-    results = []
-    for i, case in enumerate(cases, 1):
-        print(f"[{i}/68] {case['id']}", flush=True)
+    results: list[dict] = []
+    for index, case in enumerate(cases, 1):
+        print(f"[{index}/68] {case['id']}", flush=True)
         results.append(evaluate_case(case, enable_ner=enable_ner))
+    return results
 
+
+def _empty_type_bucket() -> dict:
+    return {
+        "cases": 0,
+        "passed": 0,
+        "span_tp": 0,
+        "span_fp": 0,
+        "span_fn": 0,
+        "mask_ok": 0,
+        "roundtrip_ok": 0,
+        "failed_ids": [],
+    }
+
+
+def _aggregate_results(results: list[dict]) -> tuple[dict[str, dict], int, int, int]:
     by_type: dict[str, dict] = {}
     span_tp = span_fp = span_fn = 0
-    for r in results:
-        t = r["target_type"]
-        bucket = by_type.setdefault(
-            t,
-            {
-                "cases": 0,
-                "passed": 0,
-                "span_tp": 0,
-                "span_fp": 0,
-                "span_fn": 0,
-                "mask_ok": 0,
-                "roundtrip_ok": 0,
-                "failed_ids": [],
-            },
-        )
+    for result in results:
+        bucket = by_type.setdefault(result["target_type"], _empty_type_bucket())
         bucket["cases"] += 1
-        if r["pass"]:
-            bucket["passed"] += 1
-        else:
-            bucket["failed_ids"].append(r["id"])
-        bucket["span_tp"] += len(r["tp"])
-        bucket["span_fp"] += len(r["fp"])
-        bucket["span_fn"] += len(r["fn"])
-        span_tp += len(r["tp"])
-        span_fp += len(r["fp"])
-        span_fn += len(r["fn"])
-        if r["mask_ok"]:
-            bucket["mask_ok"] += 1
-        if r["roundtrip_ok"]:
-            bucket["roundtrip_ok"] += 1
+        bucket["passed"] += int(result["pass"])
+        if not result["pass"]:
+            bucket["failed_ids"].append(result["id"])
+        bucket["span_tp"] += len(result["tp"])
+        bucket["span_fp"] += len(result["fp"])
+        bucket["span_fn"] += len(result["fn"])
+        bucket["mask_ok"] += int(result["mask_ok"])
+        bucket["roundtrip_ok"] += int(result["roundtrip_ok"])
+        span_tp += len(result["tp"])
+        span_fp += len(result["fp"])
+        span_fn += len(result["fn"])
+    return by_type, span_tp, span_fp, span_fn
 
-    type_metrics = {}
-    for t, b in by_type.items():
-        m = f1(b["span_tp"], b["span_fp"], b["span_fn"])
-        type_metrics[t] = {
-            **b,
-            **m,
-            "case_pass_rate": round(b["passed"] / b["cases"], 4),
-            "mask_accuracy": round(b["mask_ok"] / b["cases"], 4),
-            "roundtrip_rate": round(b["roundtrip_ok"] / b["cases"], 4),
+
+def _type_metrics(by_type: dict[str, dict]) -> dict[str, dict]:
+    metrics: dict[str, dict] = {}
+    for typ, bucket in by_type.items():
+        span_metrics = f1(bucket["span_tp"], bucket["span_fp"], bucket["span_fn"])
+        metrics[typ] = {
+            **bucket,
+            **span_metrics,
+            "case_pass_rate": round(bucket["passed"] / bucket["cases"], 4),
+            "mask_accuracy": round(bucket["mask_ok"] / bucket["cases"], 4),
+            "roundtrip_rate": round(bucket["roundtrip_ok"] / bucket["cases"], 4),
         }
+    return metrics
 
-    overall_cases_passed = sum(1 for r in results if r["pass"])
-    latencies = [r["latency_ms"] for r in results]
 
-    # Throughput: rules-only and NER (if enabled)
-    pos_payloads = [c["payload"] for c in cases if c["kind"] != "hard_negative"]
+def _measure_throughput(cases: list[dict], enable_ner: bool) -> tuple[dict, dict | None, dict]:
+    positive_payloads = [case["payload"] for case in cases if case["kind"] != "hard_negative"]
     print("Measuring detector throughput (rules-only)...", flush=True)
-    thr_rules = detector_throughput(pos_payloads, n=200, concurrency=20, enable_ner=False)
-    thr_ner = None
+    rules = detector_throughput(positive_payloads, n=200, concurrency=20, enable_ner=False)
+
+    ner = None
     if enable_ner:
         print("Measuring detector throughput (NER on, smaller n)...", flush=True)
-        thr_ner = detector_throughput(pos_payloads, n=40, concurrency=4, enable_ner=True)
+        ner = detector_throughput(positive_payloads, n=40, concurrency=4, enable_ner=True)
 
     http_url = os.getenv("EVAL_URL", "http://127.0.0.1:8080")
     print(f"Measuring HTTP /process at {http_url}...", flush=True)
-    http_thr = http_process_throughput(http_url, n=100, concurrency=20)
+    http = http_process_throughput(http_url, n=100, concurrency=20)
+    return rules, ner, http
 
-    # Jury gap estimate (honest, evidence-based)
-    missing_types = [
-        t
-        for t in type_metrics
-        if type_metrics[t]["recall"] == 0 and type_metrics[t]["span_fn"] > 0
+
+def _jury_type_lists(type_metrics: dict[str, dict]) -> tuple[list[str], list[str]]:
+    missing = [
+        typ
+        for typ, metrics in type_metrics.items()
+        if metrics["recall"] == 0 and metrics["span_fn"] > 0
     ]
-    weak_types = [
-        t
-        for t, m in type_metrics.items()
-        if m["f1"] < 0.8 and t not in missing_types
+    weak = [
+        typ
+        for typ, metrics in type_metrics.items()
+        if metrics["f1"] < 0.8 and typ not in missing
+    ]
+    return missing, weak
+
+
+def _build_report(
+    data: dict,
+    results: list[dict],
+    type_metrics: dict[str, dict],
+    spans: tuple[int, int, int],
+    throughput: tuple[dict, dict | None, dict],
+) -> dict:
+    span_tp, span_fp, span_fn = spans
+    thr_rules, thr_ner, http_thr = throughput
+    passed = sum(1 for result in results if result["pass"])
+    latencies = [result["latency_ms"] for result in results]
+    missing_types, weak_types = _jury_type_lists(type_metrics)
+    mask_accuracy = round(sum(1 for result in results if result["mask_ok"]) / 68, 4)
+    roundtrip_rate = round(sum(1 for result in results if result["roundtrip_ok"]) / 68, 4)
+    hard_negative_failures = [
+        result["id"]
+        for result in results
+        if result["kind"] == "hard_negative" and not result["pass"]
     ]
 
-    report = {
+    return {
         "version": data.get("version"),
         "cases_total": 68,
-        "cases_passed": overall_cases_passed,
-        "cases_failed": 68 - overall_cases_passed,
-        "case_pass_rate": round(overall_cases_passed / 68, 4),
+        "cases_passed": passed,
+        "cases_failed": 68 - passed,
+        "case_pass_rate": round(passed / 68, 4),
         "span_metrics": f1(span_tp, span_fp, span_fn),
-        "mask_accuracy": round(sum(1 for r in results if r["mask_ok"]) / 68, 4),
-        "roundtrip_rate": round(sum(1 for r in results if r["roundtrip_ok"]) / 68, 4),
+        "mask_accuracy": mask_accuracy,
+        "roundtrip_rate": roundtrip_rate,
         "per_case_latency_ms": {
             "p50": round(statistics.median(latencies), 2),
             "p95": round(sorted(latencies)[int(0.95 * (len(latencies) - 1))], 2),
@@ -481,8 +515,8 @@ def main() -> None:
             "max": round(max(latencies), 2),
         },
         "by_type": type_metrics,
-        "failed_cases": [r for r in results if not r["pass"]],
-        "passed_ids": [r["id"] for r in results if r["pass"]],
+        "failed_cases": [result for result in results if not result["pass"]],
+        "passed_ids": [result["id"] for result in results if result["pass"]],
         "throughput": {
             "detector_rules_only": thr_rules,
             "detector_ner": thr_ner,
@@ -496,19 +530,15 @@ def main() -> None:
                     "types_17": 17,
                     "types_with_zero_recall": missing_types,
                     "types_weak_f1_lt_0_8": weak_types,
-                    "case_pass": f"{overall_cases_passed}/68",
-                    "mask_accuracy": round(sum(1 for r in results if r["mask_ok"]) / 68, 4),
+                    "case_pass": f"{passed}/68",
+                    "mask_accuracy": mask_accuracy,
                 },
                 "why": "Балл режется за систематические пропуски целых типов и неточные spans.",
             },
             "criterion_3_2_demask": {
                 "max": 3,
                 "estimate": None,
-                "evidence": {
-                    "roundtrip_rate": round(
-                        sum(1 for r in results if r["roundtrip_ok"]) / 68, 4
-                    )
-                },
+                "evidence": {"roundtrip_rate": roundtrip_rate},
                 "why": "Demask через state есть; оценка зависит от стабильного round-trip на демо.",
             },
             "criterion_3_3_precision_variations": {
@@ -516,11 +546,7 @@ def main() -> None:
                 "estimate": None,
                 "evidence": {
                     "span_f1": f1(span_tp, span_fp, span_fn)["f1"],
-                    "hard_negatives_failed": [
-                        r["id"]
-                        for r in results
-                        if r["kind"] == "hard_negative" and not r["pass"]
-                    ],
+                    "hard_negatives_failed": hard_negative_failures,
                 },
                 "why": "Ловушки (Пушкин, банк-адрес, вариации) + FP на negatives.",
             },
@@ -534,58 +560,83 @@ def main() -> None:
         "results": results,
     }
 
-    # Fill numeric estimates after evidence is known
-    miss_n = len(missing_types)
-    # Rough: full coverage ~6; each missing contextual type ~ -0.5 to -1; case fail rate cuts more
-    est_31 = max(0, min(6, round(6 * (overall_cases_passed / 68) - miss_n * 0.35, 1)))
-    report["jury_gap"]["criterion_3_1_id_mask"]["estimate"] = est_31
-    report["jury_gap"]["criterion_3_1_id_mask"]["shortfall"] = round(6 - est_31, 1)
 
-    rt = report["roundtrip_rate"]
-    est_32 = 3 if rt >= 0.95 else (2 if rt >= 0.8 else (1 if rt >= 0.5 else 0))
-    report["jury_gap"]["criterion_3_2_demask"]["estimate"] = est_32
-    report["jury_gap"]["criterion_3_2_demask"]["shortfall"] = 3 - est_32
-
-    f1_all = report["span_metrics"]["f1"]
-    hn_fail = len(report["jury_gap"]["criterion_3_3_precision_variations"]["evidence"]["hard_negatives_failed"])
-    est_33 = max(0, min(4, round(4 * f1_all - hn_fail * 0.15, 1)))
-    report["jury_gap"]["criterion_3_3_precision_variations"]["estimate"] = est_33
-    report["jury_gap"]["criterion_3_3_precision_variations"]["shortfall"] = round(4 - est_33, 1)
-
-    http = http_thr or {}
-    rps = http.get("rps") if isinstance(http, dict) else None
-    p95 = (http.get("latency_ms") or {}).get("p95") if isinstance(http, dict) else None
+def _perf_estimate(http_thr: dict) -> tuple[int, str]:
+    rps = http_thr.get("rps") if isinstance(http_thr, dict) else None
+    p95 = (http_thr.get("latency_ms") or {}).get("p95") if isinstance(http_thr, dict) else None
     if rps is None:
-        est_35 = 1  # architecture only
-        why35 = "HTTP load не измерен или сервер недоступен → балл снижен, не 0."
-    elif rps >= 1000 and p95 is not None and p95 <= 500:
-        est_35 = 4
-        why35 = "Цель достигнута на локальном smoke (не RU-server)."
-    elif rps >= 200 and p95 is not None and p95 <= 1000:
-        est_35 = 2
-        why35 = f"Локально RPS≈{rps}, p95≈{p95}ms — далеко от 1000/@0.5s."
-    else:
-        est_35 = 1
-        why35 = f"Локально RPS≈{rps}, p95≈{p95}ms — сильно ниже цели."
-    report["jury_gap"]["criterion_3_5_perf"]["estimate"] = est_35
-    report["jury_gap"]["criterion_3_5_perf"]["shortfall"] = 4 - est_35
-    report["jury_gap"]["criterion_3_5_perf"]["why"] = why35
+        return 1, "HTTP load не измерен или сервер недоступен → балл снижен, не 0."
+    if rps >= 1000 and p95 is not None and p95 <= 500:
+        return 4, "Цель достигнута на локальном smoke (не RU-server)."
+    if rps >= 200 and p95 is not None and p95 <= 1000:
+        return 2, f"Локально RPS≈{rps}, p95≈{p95}ms — далеко от 1000/@0.5s."
+    return 1, f"Локально RPS≈{rps}, p95≈{p95}ms — сильно ниже цели."
 
-    OUT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def _fill_jury_estimates(report: dict) -> None:
+    jury = report["jury_gap"]
+    missing_n = len(jury["criterion_3_1_id_mask"]["evidence"]["types_with_zero_recall"])
+    est_31 = max(0, min(6, round(6 * report["case_pass_rate"] - missing_n * 0.35, 1)))
+    jury["criterion_3_1_id_mask"].update(estimate=est_31, shortfall=round(6 - est_31, 1))
+
+    roundtrip = report["roundtrip_rate"]
+    est_32 = 3 if roundtrip >= 0.95 else (2 if roundtrip >= 0.8 else (1 if roundtrip >= 0.5 else 0))
+    jury["criterion_3_2_demask"].update(estimate=est_32, shortfall=3 - est_32)
+
+    hn_failures = len(jury["criterion_3_3_precision_variations"]["evidence"]["hard_negatives_failed"])
+    est_33 = max(0, min(4, round(4 * report["span_metrics"]["f1"] - hn_failures * 0.15, 1)))
+    jury["criterion_3_3_precision_variations"].update(
+        estimate=est_33,
+        shortfall=round(4 - est_33, 1),
+    )
+
+    est_35, why_35 = _perf_estimate(report["throughput"]["http_process"])
+    jury["criterion_3_5_perf"].update(
+        estimate=est_35,
+        shortfall=4 - est_35,
+        why=why_35,
+    )
+
+
+def _print_summary(report: dict) -> None:
     print("\n=== SUMMARY ===")
-    print(f"cases: {overall_cases_passed}/68 ({report['case_pass_rate']})")
+    print(f"cases: {report['cases_passed']}/68 ({report['case_pass_rate']})")
     print(f"span F1: {report['span_metrics']}")
     print(f"mask_accuracy: {report['mask_accuracy']}  roundtrip: {report['roundtrip_rate']}")
     print("per type:")
-    for t, m in sorted(type_metrics.items()):
+    for typ, metrics in sorted(report["by_type"].items()):
         print(
-            f"  {t}: pass {m['passed']}/{m['cases']} F1={m['f1']} "
-            f"P={m['precision']} R={m['recall']} fail={m['failed_ids']}"
+            f"  {typ}: pass {metrics['passed']}/{metrics['cases']} F1={metrics['f1']} "
+            f"P={metrics['precision']} R={metrics['recall']} fail={metrics['failed_ids']}"
         )
-    print(f"throughput rules: {thr_rules}")
-    print(f"throughput ner: {thr_ner}")
-    print(f"http: {http_thr}")
+    throughput = report["throughput"]
+    print(f"throughput rules: {throughput['detector_rules_only']}")
+    print(f"throughput ner: {throughput['detector_ner']}")
+    print(f"http: {throughput['http_process']}")
     print(f"wrote {OUT_PATH}")
+
+
+def main() -> None:
+    data = json.loads(CASES_PATH.read_text(encoding="utf-8"))
+    cases = data["cases"]
+    assert len(cases) == 68, f"expected 68 cases, got {len(cases)}"
+
+    enable_ner = os.getenv("NER_ENABLED", "1") == "1"
+    print(f"Running {len(cases)} cases NER_ENABLED={enable_ner} ...", flush=True)
+    results = _run_cases(cases, enable_ner)
+    by_type, span_tp, span_fp, span_fn = _aggregate_results(results)
+    metrics = _type_metrics(by_type)
+    throughput = _measure_throughput(cases, enable_ner)
+    report = _build_report(
+        data,
+        results,
+        metrics,
+        (span_tp, span_fp, span_fn),
+        throughput,
+    )
+    _fill_jury_estimates(report)
+    OUT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    _print_summary(report)
 
 
 if __name__ == "__main__":
