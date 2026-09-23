@@ -31,7 +31,6 @@ def joined_mask_vals(text: str, typ: str, *, enable_ner: bool = False) -> list[s
     )
     if not fs:
         return []
-    label_ok = set(".,;:—–- ") | set("улдквгпршбнабпломкорпстрквартираулицапроспектпереулокшоссебульварплощадьгороддом")
     groups: list[list] = [[fs[0]]]
     for f in fs[1:]:
         prev = groups[-1][-1]
