@@ -82,10 +82,14 @@ def _split_cardholder(text: str, finding: Finding) -> list[Finding]:
 
 def _normalize_composite(text: str, finding: Finding) -> list[Finding]:
     # ADDRESS has one structural authority regardless of detector source.
-    # ML may already classify a candidate as street/house, but its raw entity
-    # span can still include role labels ("ул.", "д.", "кв."). Always pass
-    # ADDRESS through the shared value-span normalizer before masking.
+    # Whole ADDRESS candidates are split into semantic values. Already-parted
+    # candidates are only boundary-normalized, making this layer idempotent
+    # while still cleaning ML spans such as "ул. Баумана" / "д. 7".
     if finding.type == "ADDRESS":
+        if getattr(finding, "part", ""):
+            from app.pii.parts import normalize_address_part
+
+            return [normalize_address_part(text, finding)]
         return _split_address(text, finding)
 
     if getattr(finding, "part", ""):
