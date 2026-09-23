@@ -407,5 +407,12 @@ def detect_pii(
         context_ml_findings=context_ml_findings,
     )
     findings = sanitize_format_findings(text, findings)
-    findings = normalize_structures(text, findings)
-    return resolve_overlaps(filter_findings(text, findings))
+
+    # Candidate eligibility and overlap resolution operate on whole entities.
+    # Structural decomposition is intentionally last: once a composite object
+    # is accepted (ADDRESS / PERSON / PASSPORT / ...), split only its semantic
+    # values into mask spans. Otherwise a later overlap union can widen a
+    # correctly split value back over service labels such as "ул.", "д.", "кв.".
+    findings = filter_findings(text, findings)
+    findings = resolve_overlaps(findings)
+    return normalize_structures(text, findings)
