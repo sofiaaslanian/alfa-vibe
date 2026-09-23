@@ -6,8 +6,12 @@ from app.pii.parts import classify_fio_parts, split_address_span, split_person_s
 from app.pii.structural import normalize_structures
 
 
+
+IVANOV = "Иванов"
+IVANOVICH = "Иванович"
+
 def test_classify_fio_official_order():
-    assert classify_fio_parts(["Иванов", "Иван", "Иванович"]) == [
+    assert classify_fio_parts([IVANOV, "Иван", IVANOVICH]) == [
         "last",
         "first",
         "middle",
@@ -15,7 +19,7 @@ def test_classify_fio_official_order():
 
 
 def test_classify_fio_spoken_order():
-    assert classify_fio_parts(["Иван", "Иванович", "Петров"]) == [
+    assert classify_fio_parts(["Иван", IVANOVICH, "Петров"]) == [
         "first",
         "middle",
         "last",
@@ -26,7 +30,7 @@ def test_person_label_splits_parts():
     text = "ФИО клиента: Иванов Иван Иванович"
     f = normalize_structures(text, rules.detect_person_labelled(text))
     parts = {x.part: text[x.start : x.end] for x in f}
-    assert parts == {"last": "Иванов", "first": "Иван", "middle": "Иванович"}
+    assert parts == {"last": IVANOV, "first": "Иван", "middle": IVANOVICH}
 
 
 def test_passport_series_number_parts():
@@ -64,7 +68,7 @@ def test_split_person_span_unit():
     text = "xxx Иванов Иван yyy"
     out = split_person_span(text, 4, 15, 0.9, "t")
     assert [x.part for x in out] == ["first", "last"]
-    assert [text[x.start : x.end] for x in out] == ["Иванов", "Иван"]
+    assert [text[x.start : x.end] for x in out] == [IVANOV, "Иван"]
 
 
 def test_pipeline_person_parts_masked():
