@@ -31,11 +31,18 @@ jobs:
         with:
           python-version: "3.11.16"
           cache: pip
-          cache-dependency-path: requirements-ner.lock
-      - name: Install dependencies
-        run: python -m pip install --require-hashes -r requirements-ner.lock
+          cache-dependency-path: |
+            requirements.lock
+            requirements-ner.lock
+      - name: Install core dependencies
+        run: python -m pip install --require-hashes -r requirements.lock
       - name: Full pytest
+        env:
+          CONTEXT_ML_ENABLED: "0"
+          NER_ENABLED: "0"
         run: pytest -q
+      - name: Install ML dependencies
+        run: python -m pip install --require-hashes -r requirements-ner.lock
       - name: Frozen stage 1
         run: python scripts/eval_stage1_identification.py
       - name: Frozen stage 2
