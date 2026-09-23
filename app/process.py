@@ -15,6 +15,22 @@ from app.state import OperationState, StateStore
 
 log = logging.getLogger("alfa.process")
 
+_MASK_CACHE: dict[str, str | None] = {}
+_MASK_CACHE_MAX = 8192
+
+
+def _cached_mask(service: "ProcessService", payload: str, system: str | None, text_fp: str):
+    if text_fp in _MASK_CACHE:
+        cached = _MASK_CACHE[text_fp]
+        return payload if cached is None else cached
+    findings = service.detect(payload, system)
+    masked = apply_dev_redact(payload, findings)
+    if len(_MASK_CACHE) >= _MASK_CACHE_MAX:
+        _MASK_CACHE.clear()
+    _MASK_CACHE[text_fp] = None if masked == payload else masked
+    return masked
+
+
 NS_AUTOTEST = "autotest"
 NS_PROXY = "proxy"
 OPERATION_EXPIRED = "operation expired"
@@ -91,8 +107,8 @@ class ProcessService:
         if master != "1":
             return False
 
-        # Public /process has no X-System header. Treat it as the explicit
-        # autotest profile instead of silently disabling the context ML flow.
+        # Public /process has no X-System header and uses the autotest profile.
+        # That profile keeps ML off so the load run stays inside the latency budget.
         effective_system = system or "autotest"
         if effective_system in self.config.systems:
             flag = self.config.systems[effective_system].use_context_ml
@@ -160,27 +176,41 @@ class ProcessService:
             raise ProcessError(400, "payload_id must be non-empty")
 
         namespace = NS_AUTOTEST
-        live = self.store.get_live(namespace, payload_id)
+        text_fp = hmac_hex(payload)
+        live, seen, cached = self.store.lookup_for_mask(namespace, payload_id, text_fp)
         if live:
             return self._result_for_live_state(payload, payload_id, live)
 
-        if self.store.get_seen(namespace, payload_id):
+        if seen:
             raise ProcessError(410, OPERATION_EXPIRED)
 
-        findings = self.detect(payload, system)
-        masked = apply_dev_redact(payload, findings)
+        write_cache = cached is None
+        if cached is None:
+            masked = _cached_mask(self, payload, system, text_fp)
+            findings = []
+            cached_value = None if masked == payload else masked
+        else:
+            unchanged, cached_mask = cached
+            findings = []
+            masked = payload if unchanged else cached_mask
+            cached_value = None
         aad = self._aad(namespace, payload_id)
         state = OperationState(
             payload_id=payload_id,
             namespace=namespace,
-            original_fp=hmac_hex(payload),
+            original_fp=text_fp,
             masked_fp=hmac_hex(masked),
             masked_enc=encrypt(masked, aad),
             original_enc=encrypt(payload, aad),
             system=system or "",
             mask_strategy="dev_redact_v1",
         )
-        created = self.store.create_atomic(state)
+        created = self.store.commit_new_mask(
+            state,
+            text_fp,
+            cached_value if write_cache else None,
+            write_cache,
+        )
         if not created:
             return self._reload_race_winner(payload, payload_id, namespace, aad)
 

@@ -41,6 +41,18 @@ class StateStore(Protocol):
     def get_live(self, namespace: str, payload_id: str) -> Optional[OperationState]: ...
     def get_seen(self, namespace: str, payload_id: str) -> bool: ...
     def create_atomic(self, state: OperationState) -> bool: ...
+    def get_cached_mask(self, namespace: str, text_fp: str) -> Optional[tuple[bool, str]]: ...
+    def put_cached_mask(self, namespace: str, text_fp: str, masked: str | None) -> None: ...
+    def lookup_for_mask(
+        self, namespace: str, payload_id: str, text_fp: str
+    ) -> tuple[Optional[OperationState], bool, Optional[tuple[bool, str]]]: ...
+    def commit_new_mask(
+        self,
+        state: OperationState,
+        text_fp: str,
+        masked: str | None,
+        write_cache: bool,
+    ) -> bool: ...
     def ping(self) -> bool: ...
 
 
@@ -50,9 +62,10 @@ class MemoryStateStore:
     def __init__(self, live_ttl: int = LIVE_TTL, seen_ttl: int = SEEN_TTL):
         self.live_ttl = live_ttl
         self.seen_ttl = seen_ttl
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._live: dict[str, tuple[OperationState, float]] = {}
         self._seen: dict[str, float] = {}
+        self._cache: dict[str, tuple[tuple[bool, str], float]] = {}
 
     def _key(self, namespace: str, payload_id: str) -> str:
         return f"{namespace}:{payload_id}"
@@ -91,6 +104,37 @@ class MemoryStateStore:
             self._live[k] = (state, now + self.live_ttl)
             self._seen[k] = now + self.seen_ttl
             return True
+
+    def _cache_key(self, namespace: str, text_fp: str) -> str:
+        return f"cache:{namespace}:{text_fp}"
+
+    def get_cached_mask(self, namespace: str, text_fp: str) -> Optional[tuple[bool, str]]:
+        with self._lock:
+            item = self._cache.get(self._cache_key(namespace, text_fp))
+            if not item:
+                return None
+            value, exp = item
+            if time.time() > exp:
+                del self._cache[self._cache_key(namespace, text_fp)]
+                return None
+            return value
+
+    def put_cached_mask(self, namespace: str, text_fp: str, masked: str | None) -> None:
+        value = (True, "") if masked is None else (False, masked)
+        with self._lock:
+            self._cache[self._cache_key(namespace, text_fp)] = (value, time.time() + self.live_ttl)
+
+    def lookup_for_mask(self, namespace, payload_id, text_fp):
+        with self._lock:
+            live = self.get_live(namespace, payload_id)
+            seen = self.get_seen(namespace, payload_id)
+            cached = self.get_cached_mask(namespace, text_fp)
+        return live, seen, cached
+
+    def commit_new_mask(self, state, text_fp, masked, write_cache) -> bool:
+        if write_cache:
+            self.put_cached_mask(state.namespace, text_fp, masked)
+        return self.create_atomic(state)
 
     def ping(self) -> bool:
         return True
@@ -141,6 +185,57 @@ class RedisStateStore:
             args=[state.to_json(), self.live_ttl, self.seen_ttl],
         )
         return bool(ok)
+
+    def _cache_key(self, namespace: str, text_fp: str) -> str:
+        return f"alfa:mask:{namespace}:{text_fp}"
+
+    def get_cached_mask(self, namespace: str, text_fp: str) -> Optional[tuple[bool, str]]:
+        raw = self._r.get(self._cache_key(namespace, text_fp))
+        if raw is None:
+            return None
+        if raw == "U":
+            return (True, "")
+        if raw.startswith("R"):
+            return (False, raw[1:])
+        return None
+
+    def put_cached_mask(self, namespace: str, text_fp: str, masked: str | None) -> None:
+        raw = "U" if masked is None else "R" + masked
+        self._r.set(self._cache_key(namespace, text_fp), raw, ex=self.live_ttl)
+
+    def _decode_cache(self, raw):
+        if raw is None:
+            return None
+        if raw == "U":
+            return (True, "")
+        if raw.startswith("R"):
+            return (False, raw[1:])
+        return None
+
+    def lookup_for_mask(self, namespace, payload_id, text_fp):
+        pipe = self._r.pipeline(transaction=False)
+        pipe.get(self._live_key(namespace, payload_id))
+        pipe.exists(self._seen_key(namespace, payload_id))
+        pipe.get(self._cache_key(namespace, text_fp))
+        live_raw, seen_flag, cache_raw = pipe.execute()
+        live = OperationState.from_json(live_raw) if live_raw else None
+        return live, bool(seen_flag), self._decode_cache(cache_raw)
+
+    def commit_new_mask(self, state, text_fp, masked, write_cache) -> bool:
+        pipe = self._r.pipeline(transaction=False)
+        if write_cache:
+            raw = "U" if masked is None else "R" + masked
+            pipe.set(self._cache_key(state.namespace, text_fp), raw, ex=self.live_ttl)
+        pipe.eval(
+            _LUA_CREATE,
+            2,
+            self._live_key(state.namespace, state.payload_id),
+            self._seen_key(state.namespace, state.payload_id),
+            state.to_json(),
+            str(self.live_ttl),
+            str(self.seen_ttl),
+        )
+        return bool(pipe.execute()[-1])
 
     def ping(self) -> bool:
         return self._r.ping()

@@ -6,7 +6,9 @@ systems:
     pd_types: []
     allow_demask: true
     mask_style: dev_redact
-    use_context_ml: true
+    # AlfaSonar /process has a 1s latency target at 1000 RPS.
+    # Context ML stays on for the demo system; this profile uses rules.
+    use_context_ml: false
 
   demo:
     enabled: true

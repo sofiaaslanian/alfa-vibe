@@ -41,7 +41,7 @@ _process_sem: asyncio.Semaphore | None = None
 def _process_semaphore() -> asyncio.Semaphore:
     global _process_sem
     if _process_sem is None:
-        _process_sem = asyncio.Semaphore(int(os.getenv("PROCESS_CONCURRENCY", "180")))
+        _process_sem = asyncio.Semaphore(int(os.getenv("PROCESS_CONCURRENCY", "2")))
     return _process_sem
 
 
@@ -181,9 +181,11 @@ async def process(
     mode = "unknown"
     status = "200"
     try:
-        live = svc.store.get_live("autotest", body.payload_id)
-        mode = "mask" if live is None else "retry_or_demask"
-        result = svc.process(body.payload, body.payload_id, effective_system)
+        # Off the event loop so a busy worker can still answer 429 immediately.
+        result = await asyncio.to_thread(
+            svc.process, body.payload, body.payload_id, effective_system
+        )
+        mode = "process"
         return ProcessResponse(result=result)
     except ProcessError as exc:
         status = str(exc.status)

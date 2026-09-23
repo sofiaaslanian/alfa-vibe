@@ -39,6 +39,17 @@ def health() -> dict[str, str]:
     return {"status": "ok", "model": "loaded" if _model is not None else "loading"}
 
 
+def _jsonable(value):
+    if isinstance(value, dict):
+        return {key: _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    item = getattr(value, "item", None)
+    if callable(item) and type(value).__module__ == "numpy":
+        return item()
+    return value
+
+
 @app.post("/detect")
 def detect(body: DetectRequest) -> dict:
-    return {"entities": _get_model().predict(body.text)}
+    return {"entities": _jsonable(_get_model().predict(body.text))}

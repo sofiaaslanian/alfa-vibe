@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     NER_ENABLED=0 \
     STORAGE_BACKEND=redis \
     HF_HUB_OFFLINE=1 \
+    PROCESS_CONCURRENCY=2 \
     TRANSFORMERS_OFFLINE=1
 
 COPY requirements.lock .
@@ -23,4 +24,4 @@ COPY docs/acceptance_cases.json docs/holdout_cases.json docs/acceptance_summary.
 EXPOSE 8080
 
 # Multi-worker; Redis required for shared state (see docker-compose).
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "4"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "4", "--no-access-log", "--log-level", "warning"]
