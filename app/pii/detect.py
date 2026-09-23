@@ -388,10 +388,15 @@ def detect_pii(
             if enable_ner is True and not ner.enabled:
                 ner.enabled = True
                 ner.use_local = True
-            raw_entities = ner.detect_raw(text)
-            from app.pii.context_ml import raw_entities_to_context_findings
+            if hasattr(ner, "detect_raw"):
+                raw_entities = ner.detect_raw(text)
+                from app.pii.context_ml import raw_entities_to_context_findings
 
-            context_ml_findings = raw_entities_to_context_findings(text, raw_entities)
+                context_ml_findings = raw_entities_to_context_findings(text, raw_entities)
+            else:
+                # Compatibility for injected/test adapters implementing the
+                # previous canonical Finding interface.
+                context_ml_findings = ner.detect(text)
         except Exception:
             log.exception("NER detection failed")
             if fail_closed:
