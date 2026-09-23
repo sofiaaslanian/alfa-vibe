@@ -1,6 +1,8 @@
+from app.config import load_config
 from app.pii.catalog import BY_TYPE, DetectionGroup, StructureKind
 from app.pii.context_ml import raw_entities_to_context_findings
 from app.pii.detect import Finding
+from app.pii.flows import ContextFlow
 from app.pii.structural import normalize_structures
 
 
@@ -47,3 +49,34 @@ def test_document_structure_is_centralized():
         ("series", "45 11"),
         ("number", "123456"),
     ]
+
+
+def test_config_defaults_match_canonical_catalog():
+    cfg = load_config("config.yaml")
+    assert set(cfg.default_pd_types) == set(BY_TYPE)
+    assert {"SNILS", "OMS", "INTERNATIONAL_PASSPORT"}.isdisjoint(cfg.default_pd_types)
+
+
+def test_context_ml_empty_result_is_authoritative():
+    text = "ФИО клиента: Иванов Иван"
+    legacy = ContextFlow.detect(text, ml_findings=None)
+    strict_ml = ContextFlow.detect(text, ml_findings=[])
+
+    assert any(f.type == "PERSON" for f in legacy.findings)
+    assert strict_ml.findings == []
+
+
+def test_raw_person_maps_to_cardholder_in_card_context():
+    text = "Имя держателя карты: IVAN IVANOV"
+    start = text.index("IVAN")
+    raw = [{"entity_group": "PERSON", "start": start, "end": len(text), "score": 0.99}]
+    out = raw_entities_to_context_findings(text, raw)
+    assert any(f.type == "CARDHOLDER_NAME" for f in out)
+
+
+def test_raw_org_maps_to_passport_issuer_in_issuer_context():
+    text = "Паспорт выдан ОМВД России по району Арбат"
+    start = text.index("ОМВД")
+    raw = [{"entity_group": "ORG", "start": start, "end": len(text), "score": 0.98}]
+    out = raw_entities_to_context_findings(text, raw)
+    assert any(f.type == "PASSPORT_ISSUER" for f in out)
