@@ -1,0 +1,92 @@
+name: sonar-scan-temp
+
+on:
+  push:
+    branches: [cursor/alfagen-sonar-10000]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Snapshot submission tree (same as zip)
+        run: |
+          mkdir -p /tmp/src /tmp/out
+          git archive --format=tar HEAD | tar -x -C /tmp/src
+          rm -f /tmp/src/.github/workflows/sonar-scan-temp.yml
+          (cd /tmp/src && find . -type f | sort) > /tmp/out/files.txt
+          chmod -R a+rwX /tmp/src
+          wc -l /tmp/out/files.txt
+
+      - name: Start SonarQube Community
+        run: |
+          docker run -d --name sonarqube -p 9000:9000 \
+            -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true sonarqube:community
+          for i in $(seq 1 120); do
+            s=$(curl -s http://localhost:9000/api/system/status | jq -r .status 2>/dev/null || true)
+            echo "status=$s"
+            [ "$s" = "UP" ] && break
+            sleep 5
+          done
+          PASS='Sonar-Scan-Temp-2026!'
+          curl -s -u admin:admin -X POST \
+            "http://localhost:9000/api/users/change_password" \
+            --data-urlencode "login=admin" --data-urlencode "previousPassword=admin" \
+            --data-urlencode "password=$PASS" || true
+          curl -s -u "admin:$PASS" -X POST \
+            "http://localhost:9000/api/settings/set?key=sonar.multi-quality-mode.enabled&value=false" || true
+          TOKEN=$(curl -s -u "admin:$PASS" -X POST \
+            "http://localhost:9000/api/user_tokens/generate?name=ci&type=GLOBAL_ANALYSIS_TOKEN" | jq -r .token)
+          echo "::add-mask::$TOKEN"
+          echo "SONAR_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "SONAR_PASS=$PASS" >> "$GITHUB_ENV"
+          echo "server version: $(curl -s http://localhost:9000/api/server/version)" | tee /tmp/out/version.txt
+
+      - name: Scan
+        run: |
+          docker run --rm --network host \
+            -e SONAR_HOST_URL=http://localhost:9000 -e SONAR_TOKEN \
+            -v /tmp/src:/usr/src sonarsource/sonar-scanner-cli \
+            -Dsonar.projectKey=alfa -Dsonar.projectName=alfa \
+            -Dsonar.sources=. -Dsonar.scm.disabled=true 2>&1 | tail -n 120
+
+      - name: Wait for background task and export issues
+        run: |
+          CE=$(grep ceTaskUrl /tmp/src/.scannerwork/report-task.txt | cut -d= -f2-)
+          for i in $(seq 1 120); do
+            st=$(curl -s -u "admin:$SONAR_PASS" "$CE" | jq -r .task.status)
+            echo "ce=$st"
+            case "$st" in SUCCESS|FAILED|CANCELED) break;; esac
+            sleep 3
+          done
+          A="admin:$SONAR_PASS"
+          B=http://localhost:9000
+          curl -s -u "$A" "$B/api/issues/search?components=alfa&resolved=false&ps=500&additionalFields=_all" > /tmp/out/issues.json
+          curl -s -u "$A" "$B/api/hotspots/search?projectKey=alfa&ps=500" > /tmp/out/hotspots.json
+          curl -s -u "$A" "$B/api/measures/component?component=alfa&metricKeys=ncloc,lines,files,bugs,vulnerabilities,code_smells,sqale_index,sqale_debt_ratio,sqale_rating,reliability_rating,security_rating,duplicated_lines_density,security_hotspots,violations,blocker_violations,critical_violations,major_violations,minor_violations,info_violations" > /tmp/out/measures.json
+          curl -s -u "$A" "$B/api/languages/list" | jq -c '[.languages[].key]' > /tmp/out/languages.json
+          curl -s -u "$A" "$B/api/measures/component_tree?component=alfa&metricKeys=ncloc,violations&qualifiers=FIL&ps=500" > /tmp/out/files_measures.json
+          jq -r '.issues[] | [.severity, .type, .rule, ((.component | sub("^alfa:"; "")) + ":" + ((.line // 0) | tostring)), ((.impacts // []) | map(.softwareQuality + "/" + .severity) | join(",")), .message] | @tsv' /tmp/out/issues.json | sort > /tmp/out/issues.tsv
+          echo "===== ISSUES ($(jq .total /tmp/out/issues.json)) ====="
+          cat /tmp/out/issues.tsv
+          echo "===== HOTSPOTS ====="
+          jq -r '.hotspots[]? | [.vulnerabilityProbability, .ruleKey, ((.component | sub("^alfa:"; "")) + ":" + ((.line // 0) | tostring)), .message] | @tsv' /tmp/out/hotspots.json
+          echo "===== MEASURES ====="
+          jq -r '.component.measures[] | "\(.metric)=\(.value)"' /tmp/out/measures.json | sort
+          echo "===== ANALYZED FILES ====="
+          jq -r '.components[] | "\(.path)\t" + ([.measures[] | "\(.metric)=\(.value)"] | join(" "))' /tmp/out/files_measures.json | sort
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sonar-report
+          path: /tmp/out/
+          retention-days: 3
