@@ -17,6 +17,7 @@ log = logging.getLogger("alfa.process")
 
 NS_AUTOTEST = "autotest"
 NS_PROXY = "proxy"
+OPERATION_EXPIRED = "operation expired"
 
 # ML context flow is needed when any context-defined type is enabled.
 CONTEXT_TYPES = {
@@ -139,7 +140,7 @@ class ProcessService:
             raise ProcessError(409, "payload_id already bound to a different payload")
 
         if self.store.get_seen(namespace, payload_id):
-            raise ProcessError(410, "operation expired")
+            raise ProcessError(410, OPERATION_EXPIRED)
 
         findings = self.detect(payload, system)
         masked = apply_dev_redact(payload, findings)
@@ -160,7 +161,7 @@ class ProcessService:
             live = self.store.get_live(namespace, payload_id)
             if not live:
                 if self.store.get_seen(namespace, payload_id):
-                    raise ProcessError(410, "operation expired")
+                    raise ProcessError(410, OPERATION_EXPIRED)
                 raise ProcessError(503, "state store race failed")
             fp = hmac_hex(payload)
             if fp == live.original_fp:
@@ -185,7 +186,7 @@ class ProcessService:
         if self.store.get_live(namespace, operation_id):
             raise ProcessError(409, "operation_id already exists")
         if self.store.get_seen(namespace, operation_id):
-            raise ProcessError(410, "operation expired")
+            raise ProcessError(410, OPERATION_EXPIRED)
 
         findings = self.detect(text, system)
         masked, mapping = apply_scoped_tokens(text, findings)
@@ -223,7 +224,7 @@ class ProcessService:
         live = self.store.get_live(namespace, operation_id)
         if not live:
             if self.store.get_seen(namespace, operation_id):
-                raise ProcessError(410, "operation expired")
+                raise ProcessError(410, OPERATION_EXPIRED)
             raise ProcessError(404, "operation not found")
         if live.system and live.system != system:
             raise ProcessError(403, "operation belongs to another system")
