@@ -74,9 +74,9 @@ curl -s localhost:8080/proxy/chat \
 | `autotest` | все | да | нет | `/process` нагрузка |
 | `demo` | все + combo PIN/CVV↔карта | да | **RuBERT** | proxy / UI / ловушки |
 | `format_only` | email/phone/INN/card | нет | нет | урезанный consumer |
-| `high_rps` | все кроме PERSON | да | нет | нагрузка без NER |
+| `high_rps` | все 17 типов | да | нет | нагрузка без ML |
 
-**ФИО:** RuBERT (`redmadrobot-rnd/rubert-base-pii-ner`) находит кандидатов в свободном тексте; **discourse** решает «клиент / меня зовут» vs «поэт Пушкин». Natasha не используется.  
+**Контекстные ПД:** в `demo` RuBERT (`redmadrobot-rnd/rubert-base-pii-ner`) добавляет кандидатов в свободном тексте, точные labelled/role rules работают параллельно; **discourse** решает «клиент / меня зовут» vs «поэт Пушкин». Natasha не используется.  
 Включить локально: `pip install -r requirements-ner.txt` и `NER_ENABLED=1` в `.env`.  
 Бонус УЛ: `SNILS`, `INTERNATIONAL_PASSPORT`, `OMS`.  
 Combo на `demo`: PIN/CVV маскируются только вместе с `PAYMENT_CARD`.  
@@ -106,7 +106,7 @@ STORAGE_BACKEND=memory NER_ENABLED=0 uvicorn app.main:app --port 8080 &
 
 - Prometheus: `GET /metrics` (Latency / RPS / TPS)
 - Ready: `GET /ready` (проверка state store)
-- NER для **demo/proxy**: `NER_ENABLED=1` + `use_ner: true` (RuBERT → discourse: клиент vs знаменитость)
+- ML для **demo/proxy**: `CONTEXT_ML_ENABLED=1` + `use_context_ml: true` (RuBERT ∪ точные rules → discourse)
 - `/process` (autotest/high_rps): `use_ner: false` — RPS без ML
 - ФИО без NER (load): поля `ФИО:` / роль `Клиент Имя Фамилия`
 - Локальный smoke нагрузки:
