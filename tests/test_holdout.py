@@ -34,28 +34,36 @@ def _filter(findings, enabled: list[str]):
     return out
 
 
+def _holdout_failures(case) -> list[str]:
+    raw = detect_pii(case["payload"], enable_ner=False)
+    got = _filter(raw, case["enabled_types"])
+    failures: list[str] = []
+    got_types = {_acc_type(f.type) for f in got}
+
+    if "expect_types" in case:
+        expected_types = set(case["expect_types"])
+        if got_types != expected_types:
+            failures.append(f"{case['id']}: types {got_types} != {expected_types}")
+
+    if "expect_min_findings" in case and len(got) < case["expect_min_findings"]:
+        failures.append(
+            f"{case['id']}: findings {len(got)} < {case['expect_min_findings']}"
+        )
+
+    masked = apply_dev_redact(case["payload"], got)
+    expects_mask = bool(case.get("expect_types"))
+    if expects_mask and "*" not in masked:
+        failures.append(f"{case['id']}: expected some masking, got {masked!r}")
+    return failures
+
+
 def test_holdout_cases():
     data = json.loads(HOLDOUT.read_text(encoding="utf-8"))
-    failures = []
-    for case in data["cases"]:
-        raw = detect_pii(case["payload"], enable_ner=False)
-        got = _filter(raw, case["enabled_types"])
-        got_types = {_acc_type(f.type) for f in got}
-        if "expect_types" in case:
-            exp = set(case["expect_types"])
-            if got_types != exp:
-                # allow supersets only when expect is non-empty? no — exact type set
-                if got_types != exp:
-                    failures.append(f"{case['id']}: types {got_types} != {exp}")
-        if "expect_min_findings" in case:
-            if len(got) < case["expect_min_findings"]:
-                failures.append(
-                    f"{case['id']}: findings {len(got)} < {case['expect_min_findings']}"
-                )
-        # round-trip shape via redact
-        masked = apply_dev_redact(case["payload"], got)
-        if case.get("expect_types") and not any(ch == "*" for ch in masked) and case["expect_types"]:
-            failures.append(f"{case['id']}: expected some masking, got {masked!r}")
+    failures = [
+        failure
+        for case in data["cases"]
+        for failure in _holdout_failures(case)
+    ]
     assert not failures, "\n".join(failures)
 
 
