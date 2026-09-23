@@ -15,7 +15,7 @@ from app.pii.detect import Finding
 
 _NAME_LABELS = {"FIRST_NAME", "LAST_NAME", "MIDDLE_NAME", "PER", "PERSON"}
 _LOCATION_LABELS = {"COUNTRY", "REGION", "DISTRICT", "CITY"}
-_ADDRESS_LABELS = {"REGION", "DISTRICT", "CITY", "STREET", "HOUSE"}
+_ADDRESS_LABELS = {"ADDRESS", "REGION", "DISTRICT", "CITY", "STREET", "HOUSE"}
 
 _BIRTH_ROLE_RE = re.compile(
     r"(?i)(?:место\s+рожден|родил(?:ся|ась)|place\s+of\s+birth|birth\s*place)"
