@@ -573,6 +573,16 @@ def _perf_estimate(http_thr: dict) -> tuple[int, str]:
     return 1, f"Локально RPS≈{rps}, p95≈{p95}ms — сильно ниже цели."
 
 
+def _demask_estimate(roundtrip: float) -> int:
+    if roundtrip >= 0.95:
+        return 3
+    if roundtrip >= 0.8:
+        return 2
+    if roundtrip >= 0.5:
+        return 1
+    return 0
+
+
 def _fill_jury_estimates(report: dict) -> None:
     jury = report["jury_gap"]
     missing_n = len(jury["criterion_3_1_id_mask"]["evidence"]["types_with_zero_recall"])
@@ -580,7 +590,7 @@ def _fill_jury_estimates(report: dict) -> None:
     jury["criterion_3_1_id_mask"].update(estimate=est_31, shortfall=round(6 - est_31, 1))
 
     roundtrip = report["roundtrip_rate"]
-    est_32 = 3 if roundtrip >= 0.95 else (2 if roundtrip >= 0.8 else (1 if roundtrip >= 0.5 else 0))
+    est_32 = _demask_estimate(roundtrip)
     jury["criterion_3_2_demask"].update(estimate=est_32, shortfall=3 - est_32)
 
     hn_failures = len(jury["criterion_3_3_precision_variations"]["evidence"]["hard_negatives_failed"])
