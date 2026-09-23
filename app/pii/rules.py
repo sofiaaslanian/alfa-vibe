@@ -1035,6 +1035,7 @@ def detect_citizenship(text: str) -> list[Finding]:
 # --- passport issuer ---
 ISSUER_ORG_RE = re.compile(
     r"(?:"
+    r"(?:(?:отдел(?:ом|а|е)?|отделени(?:ем|я|е)|территориальн\w*\s+отдел\w*)\s+)?"
     r"(?:ГУ|ОМВД|УВД|МВД|ОВД|ТП|УФМС|УМВД|ГУВД|МФЦ)"
     r"(?:\s+(?:МВД|России|РФ))?"
     r"\s+[А-Яа-яЁёA-Za-z0-9\.\-]+"
@@ -1076,23 +1077,12 @@ def _issuer_label_allowed(text: str, match) -> bool:
     return not _has_any(right, [RX_REFERENCE, r"указано\s+в\s+справочник"])
 
 
-ISSUER_UNIT_PREFIX_RE = re.compile(
-    r"(?i)(?:"
-    r"отдел(?:ом|а|е)?|отделени(?:ем|я|е)|"
-    r"территориальн\w*\s+отдел\w*"
-    r")\s+"
-)
-
-
 def _issuer_value_position(text: str, position: int) -> int:
     date_match = DATE_NUM_RE.match(text, position) or DATE_TEXT_RE.match(text, position)
     if date_match:
         position = date_match.end()
     while position < len(text) and text[position] in " \t,;—–-":
         position += 1
-    unit = ISSUER_UNIT_PREFIX_RE.match(text, position)
-    if unit:
-        position = unit.end()
     return position
 
 
