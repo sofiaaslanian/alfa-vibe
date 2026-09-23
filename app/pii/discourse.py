@@ -94,47 +94,26 @@ def is_personal_person_mention(text: str, start: int, end: int) -> bool:
     right = _right(text, end, 100)
     claim = has_kyc_or_self_claim(text, start, end)
     third = has_third_party_discourse(text, start, end)
-    # Banking intent anywhere nearby (after name OR whole short utterance)
-    banking = has_banking_intent(right) or has_banking_intent(_ctx(text, start, end, 160))
+    client = bool(CLIENT_ROLE_RE.search(left))
+    self_id = bool(
+        KYC_FIELD_RE.search(left)
+        or SELF_ID_BEFORE_RE.search(left)
+        or SELF_ID_AFTER_RE.search(right)
+    )
+    banking = has_banking_intent(right) or has_banking_intent(
+        _ctx(text, start, end, 160)
+    )
     banking_strong = has_banking_intent(text, include_generic=False)
     contact = bool(CONTACT_BEFORE_RE.search(left))
 
-    # Self-ID / KYC field always wins.
-    if KYC_FIELD_RE.search(left) or SELF_ID_BEFORE_RE.search(left) or SELF_ID_AFTER_RE.search(right):
+    if self_id:
         return True
-
-    # «свяжитесь с Иваном…» / «напишите письмо …» — named addressee is PII
-    if contact and not third:
+    if client and banking:
         return True
-
-    # Concrete banking intent + no celebrity/narrative cue.
-    # Covers lead («Иван Петров хочет оформить карту») and NER mid-sentence
-    # («Заявку на кредит подал Дмитрий Орлов»).
-    if banking_strong and not third:
-        return True
-
-    # Client + banking request (holdout + «хочу заказать карту»)
-    if CLIENT_ROLE_RE.search(left) and banking:
-        return True
-
-    # Client role, no third-party narrative
-    if CLIENT_ROLE_RE.search(left) and not third:
-        return True
-
-    # Client + third-party without banking → drop
-    if CLIENT_ROLE_RE.search(left) and third and not banking:
+    if third:
         return False
+    return contact or banking_strong or client or claim
 
-    if claim and not third:
-        return True
-
-    if third and not claim:
-        return False
-
-    if not claim:
-        return False
-
-    return False
 
 def should_skip_person(text: str, start: int, end: int) -> bool:
     """True → drop PERSON finding."""
