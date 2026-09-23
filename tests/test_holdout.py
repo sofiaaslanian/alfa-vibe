@@ -71,9 +71,11 @@ def test_mixed_person_email_ner_off():
     text = "Клиент Иванов Иван, почта ivan@test.ru"
     f = detect_pii(text, enable_ner=False)
     types = {x.type for x in f}
-    assert "PERSON" in types and "EMAIL" in types
+    assert "PERSON" in types
+    assert "EMAIL" in types
     masked = apply_dev_redact(text, f)
-    assert "Иванов" not in masked and "ivan@" not in masked
+    assert "Иванов" not in masked
+    assert "ivan@" not in masked
 
 
 def test_client_pushkin_protected_poet_skipped():

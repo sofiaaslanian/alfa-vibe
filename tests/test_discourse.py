@@ -79,9 +79,11 @@ def test_ner_mid_sentence_banking(monkeypatch):
     )
     assert kept_fs
     kept = keep[kept_fs[0].start : kept_fs[-1].end]
-    assert "Дмитрий" in kept and "Орлов" in kept
+    assert "Дмитрий" in kept
+    assert "Орлов" in kept
     poet = [f for f in detect_pii(drop, enable_ner=True) if f.type == "PERSON"]
-    assert poet and all(getattr(f, "decision", "") == "allow" for f in poet)
+    assert poet
+    assert all(getattr(f, "decision", "") == "allow" for f in poet)
     assert any("Пушкин" in drop[f.start : f.end] or ALEXANDER in drop[f.start : f.end] for f in poet)
 
 

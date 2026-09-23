@@ -22,19 +22,23 @@ def test_checksums_inn_snils_luhn():
 def test_snils_requires_label():
     assert rules.detect_snils("Код 112-233-445 95") == []
     f = rules.detect_snils("СНИЛС клиента: 112-233-445 95")
-    assert len(f) == 1 and f[0].type == "SNILS"
+    assert len(f) == 1
+    assert f[0].type == "SNILS"
 
 
 def test_zagran_and_oms():
     z = rules.detect_international_passport("Загранпаспорт: 75 1234567")
-    assert len(z) == 1 and z[0].type == "INTERNATIONAL_PASSPORT"
+    assert len(z) == 1
+    assert z[0].type == "INTERNATIONAL_PASSPORT"
     o = rules.detect_oms("Полис ОМС 1234567890123456")
-    assert len(o) == 1 and o[0].type == "OMS"
+    assert len(o) == 1
+    assert o[0].type == "OMS"
 
 
 def test_cvv_oborote_phrase():
     f = rules.detect_cvv("Три цифры на обороте карты 321")
-    assert len(f) == 1 and f[0].type == "CVV"
+    assert len(f) == 1
+    assert f[0].type == "CVV"
     assert rules.detect_cvv("код 321") == []
 
 
@@ -74,4 +78,5 @@ def test_combo_policy_demo_system():
         "Карта 4111 1111 1111 1111, PIN-код карты: 4321", system="demo"
     )
     types = {f.type for f in both}
-    assert "PAYMENT_CARD" in types and "PIN" in types
+    assert "PAYMENT_CARD" in types
+    assert "PIN" in types

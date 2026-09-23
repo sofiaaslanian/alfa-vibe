@@ -25,7 +25,8 @@ def test_phone_positive():
 
 def test_card_luhn():
     f = rules.detect_card("Карта 4111 1111 1111 1111")
-    assert len(f) == 1 and f[0].type == "PAYMENT_CARD"
+    assert len(f) == 1
+    assert f[0].type == "PAYMENT_CARD"
 
 
 def test_card_invalid_luhn_without_keyword():
@@ -36,7 +37,8 @@ def test_card_invalid_luhn_without_keyword():
 def test_card_invalid_luhn_with_keyword_fallback():
     # Cloud.ru-style: after «карта» typo PAN still protected.
     f = rules.detect_card("Карта 4111 1111 1111 1112")
-    assert len(f) == 1 and f[0].type == "PAYMENT_CARD"
+    assert len(f) == 1
+    assert f[0].type == "PAYMENT_CARD"
     assert f[0].detector == "card_rule_no_luhn_v1"
 
 

@@ -10,7 +10,8 @@ from app.pii.ner import expand_span_to_word, map_entity, merge_adjacent_person
 
 def test_map_name_parts():
     e = map_entity({"entity_group": "FIRST_NAME", "start": 0, "end": 4, "score": 0.9})
-    assert e is not None and e.type == "PERSON"
+    assert e is not None
+    assert e.type == "PERSON"
 
 
 def test_expand_clipped_surname():
@@ -35,9 +36,11 @@ def test_attach_pushkin_surname():
 
 def test_map_phone_and_email():
     phone = map_entity({"entity_group": "PHONE", "start": 0, "end": 12, "score": 0.9})
-    assert phone is not None and phone.type == "PHONE"
+    assert phone is not None
+    assert phone.type == "PHONE"
     email = map_entity({"entity_group": "EMAIL", "start": 0, "end": 5, "score": 0.9})
-    assert email is not None and email.type == "EMAIL"
+    assert email is not None
+    assert email.type == "EMAIL"
 
 
 def test_map_ignores_geopolitical_country():
@@ -56,15 +59,17 @@ def test_merge_ivan_petrov():
         Finding("PERSON", 13, 18, 0.99, "ml", part="last"),
     ]
     glued = merge_adjacent_person(sub)
-    assert len(glued) == 1 and glued[0].start == 11 and glued[0].end == 18
+    assert len(glued) == 1
+    assert glued[0].start == 11
+    assert glued[0].end == 18
 
 
 @pytest.mark.ner
-def test_rubert_fio_live():
+def test_rubert_fio_live(monkeypatch):
     pytest.importorskip("transformers")
-    os.environ["NER_ENABLED"] = "1"
-    os.environ["NER_LOCAL"] = "1"
-    os.environ["NER_FAIL_CLOSED"] = "0"
+    monkeypatch.setenv("NER_ENABLED", "1")
+    monkeypatch.setenv("NER_LOCAL", "1")
+    monkeypatch.setenv("NER_FAIL_CLOSED", "0")
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
     import app.pii.detect as detect_mod
@@ -82,7 +87,8 @@ def test_rubert_fio_live():
     persons = [f for f in detect_pii(text, enable_ner=True) if f.type == "PERSON"]
     assert persons
     joined = text[min(f.start for f in persons) : max(f.end for f in persons)]
-    assert "Иван" in joined and "Петров" in joined
+    assert "Иван" in joined
+    assert "Петров" in joined
     poet = detect_pii("Александр Пушкин — русский поэт", enable_ner=True)
     poet_mask = [f for f in poet if f.type == "PERSON" and getattr(f, "decision", "mask") == "mask"]
     poet_allow = [f for f in poet if f.type == "PERSON" and getattr(f, "decision", "") == "allow"]
