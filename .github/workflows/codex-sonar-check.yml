@@ -1,0 +1,108 @@
+name: Candidate SonarQube analysis
+on:
+  push:
+    branches: [codex/alfagen-score-candidate-v1]
+permissions:
+  contents: read
+jobs:
+  sonar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Start isolated SonarQube
+        run: |
+          docker run -d --name candidate-sonar -p 127.0.0.1:9000:9000 -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true sonarqube:25.6.0.109173-community
+      - name: Analyze checkout and export findings
+        shell: python
+        run: |
+          import base64, json, os, pathlib, secrets, shutil, subprocess, time
+          from urllib import request, parse, error
+
+          base = "http://127.0.0.1:9000"
+          for attempt in range(180):
+              try:
+                  with request.urlopen(base + "/api/system/status", timeout=3) as response:
+                      if json.load(response).get("status") == "UP":
+                          break
+              except (OSError, ValueError):
+                  pass
+              time.sleep(2)
+          else:
+              subprocess.run(["docker", "logs", "candidate-sonar"], check=False)
+              raise RuntimeError("SonarQube startup timeout")
+
+          def api(path, data=None, auth="admin:admin"):
+              payload = parse.urlencode(data).encode() if data is not None else None
+              headers = {"Authorization": "Basic " + base64.b64encode(auth.encode()).decode()}
+              with request.urlopen(request.Request(base + path, payload, headers), timeout=60) as response:
+                  body = response.read()
+                  return json.loads(body) if body else {}
+
+          password = secrets.token_urlsafe(32)
+          print("::add-mask::" + password)
+          api("/api/users/change_password", {"login": "admin", "previousPassword": "admin", "password": password})
+          token = api("/api/user_tokens/generate", {"name": "candidate-scan"}, "admin:" + password)["token"]
+          print("::add-mask::" + token)
+          api("/api/projects/create", {"project": "alfa-candidate", "name": "Alfa candidate"}, token + ":")
+
+          source = pathlib.Path(os.environ["RUNNER_TEMP"]) / "alfa-source"
+          source.mkdir()
+          archive = subprocess.run(["git", "archive", "HEAD"], stdout=subprocess.PIPE, check=True).stdout
+          subprocess.run(["tar", "-x", "-C", str(source)], input=archive, check=True)
+          (source / ".github/workflows/codex-sonar-check.yml").unlink()
+          source.chmod(0o777)
+          env = dict(os.environ, SONAR_TOKEN=token, SONAR_HOST_URL=base)
+          subprocess.run([
+              "docker", "run", "--rm", "--network", "host",
+              "--user", "0:0", "-e", "SONAR_TOKEN", "-e", "SONAR_HOST_URL",
+              "-v", str(source) + ":/usr/src",
+              "sonarsource/sonar-scanner-cli:latest",
+              "-Dsonar.projectKey=alfa-candidate", "-Dsonar.sources=.",
+              "-Dsonar.scm.disabled=true", "-Dsonar.python.version=3.11",
+              "-Dsonar.sourceEncoding=UTF-8",
+          ], env=env, check=True)
+          task_properties = dict(line.split("=", 1) for line in (source / ".scannerwork/report-task.txt").read_text().splitlines() if "=" in line)
+          task_id = task_properties["ceTaskId"]
+          for attempt in range(180):
+              task = api("/api/ce/task?id=" + task_id, auth=token + ":")["task"]
+              if task["status"] == "SUCCESS":
+                  break
+              if task["status"] in {"FAILED", "CANCELED"}:
+                  raise RuntimeError(task)
+              time.sleep(2)
+          else:
+              raise RuntimeError("SonarQube analysis timeout")
+
+          out = pathlib.Path("sonar-report")
+          out.mkdir()
+          issues = []
+          page = 1
+          while True:
+              body = api("/api/issues/search?componentKeys=alfa-candidate&ps=500&p=" + str(page), auth=token + ":")
+              issues.extend(body["issues"])
+              if len(issues) >= body["total"]:
+                  break
+              page += 1
+          hotspots = api("/api/hotspots/search?projectKey=alfa-candidate&ps=500", auth=token + ":")
+          version = request.urlopen(base + "/api/server/version").read().decode()
+          plugins = api("/api/plugins/installed", auth=token + ":")
+          report = {"commit": os.environ["GITHUB_SHA"], "server_version": version, "issues": issues, "hotspots": hotspots, "plugins": plugins}
+          (out / "issues.json").write_text(json.dumps(report, indent=2))
+          from collections import Counter
+          print("SONAR_SUMMARY", json.dumps({"count": len(issues), "severity": dict(Counter(i["severity"] for i in issues)), "rules": dict(Counter(i["rule"] for i in issues))}))
+          for issue in issues:
+              print("SONAR_ISSUE", json.dumps({k: issue.get(k) for k in ("rule", "severity", "component", "line", "message")}))
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sonar-candidate-report
+          path: sonar-report/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Stop isolated analyzer
+        if: always()
+        run: docker rm -f candidate-sonar
