@@ -128,3 +128,28 @@ def test_explicit_fail_open_is_compatibility_mode_only(monkeypatch):
         assert any(f.type == "PERSON" for f in findings)
     finally:
         detect_mod._ner = old
+
+
+def test_ambiguous_city_needs_address_role():
+    neutral = "Поездка в Москву запланирована на завтра"
+    start = neutral.index("Москву")
+    raw = [{"entity_group": "CITY", "start": start, "end": start + len("Москву"), "score": 0.95}]
+    out = raw_entities_to_context_findings(neutral, raw)
+    assert not any(f.type == "ADDRESS" for f in out)
+
+    personal = "Я живу в Москве"
+    start = personal.index("Москве")
+    raw = [{"entity_group": "CITY", "start": start, "end": start + len("Москве"), "score": 0.95}]
+    out = raw_entities_to_context_findings(personal, raw)
+    assert any(f.type == "ADDRESS" for f in out)
+
+
+def test_current_model_coverage_has_explicit_issuer_fallback():
+    from app.pii.context_ml import ML_COVERED_CONTEXT_TYPES
+
+    assert "PASSPORT_ISSUER" not in ML_COVERED_CONTEXT_TYPES
+
+    text = "Паспорт выдан ОМВД России по району Арбат"
+    out = ContextFlow.detect(text, ml_findings=[])
+    assert any(f.type == "PASSPORT_ISSUER" for f in out.findings)
+    assert not any(f.type == "PERSON" for f in out.findings)
