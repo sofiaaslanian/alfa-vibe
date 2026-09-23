@@ -31,9 +31,9 @@ _ADDR_STREET_RE = re.compile(
     r")"
 )
 # Include role prefixes in house/flat spans so redact matches full-address baselines.
-_ADDR_HOUSE_RE = re.compile(r"(?i)((?:д\.|дом)\s*\d+[А-Яа-яA-Za-z]?)")
+_ADDR_HOUSE_RE = re.compile(r"(?i)((?:д\.|дом)\s*\d+[А-ЯA-Z]?)")
 _ADDR_FLAT_RE = re.compile(r"(?i)((?:кв\.|квартира)\s*\d+)")
-_ADDR_CORP_RE = re.compile(r"(?i)((?:корп\.|корпус|стр\.|строен\w*)\s*\d+[А-Яа-яA-Za-z]?)")
+_ADDR_CORP_RE = re.compile(r"(?i)((?:корп\.|корпус|стр\.|строен\w*)\s*\d+[А-ЯA-Z]?)")
 
 
 def classify_fio_parts(tokens: list[str]) -> list[str]:
