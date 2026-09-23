@@ -106,6 +106,30 @@ def _ctx(text: str, start: int, end: int, size: int = 100) -> str:
     return text[max(0, start - size): min(len(text), end + size)]
 
 
+def _nearest_location_role(text: str, start: int, size: int = 120) -> str | None:
+    """Resolve ambiguous location semantics by the closest preceding role cue.
+
+    A generic CITY/LOC entity can represent a birth place, citizenship value,
+    or address component. Looking for any cue in a symmetric context window
+    leaks an older role into the next field. The closest explicit role before
+    the entity is the authoritative one.
+    """
+    left = text[max(0, start - size):start]
+    roles = {
+        "birth": _BIRTH_ROLE_RE,
+        "citizenship": _CITIZEN_ROLE_RE,
+        "address": _ADDRESS_ROLE_RE,
+    }
+    best_role: str | None = None
+    best_end = -1
+    for role, pattern in roles.items():
+        for match in pattern.finditer(left):
+            if match.end() > best_end:
+                best_end = match.end()
+                best_role = role
+    return best_role
+
+
 def _append_unique(
     out: list[Finding],
     seen: set[tuple[str, int, int, str]],
@@ -148,34 +172,35 @@ def _add_name_roles(
 
 
 def _add_address_role(
+    text: str,
     out: list[Finding],
     seen: set[tuple[str, int, int, str]],
     label: str,
     start: int,
     end: int,
     score: float,
-    ctx: str,
 ) -> None:
     if label not in _ADDRESS_LABELS:
         return
     is_specific_address = label in {"ADDRESS", "STREET", "HOUSE"}
-    if not is_specific_address and not _ADDRESS_ROLE_RE.search(ctx):
+    if not is_specific_address and _nearest_location_role(text, start) != "address":
         return
     _append_unique(out, seen, "ADDRESS", start, end, score, _ADDRESS_PART.get(label, ""))
 
 
 def _add_location_roles(
+    text: str,
     out: list[Finding],
     seen: set[tuple[str, int, int, str]],
     label: str,
     start: int,
     end: int,
     score: float,
-    ctx: str,
 ) -> None:
-    if label in _LOCATION_LABELS and _BIRTH_ROLE_RE.search(ctx):
+    role = _nearest_location_role(text, start)
+    if label in _LOCATION_LABELS and role == "birth":
         _append_unique(out, seen, "PLACE_OF_BIRTH", start, end, score)
-    if label in {"COUNTRY", "LOC", "LOCATION"} and _CITIZEN_ROLE_RE.search(ctx):
+    if label in {"COUNTRY", "LOC", "LOCATION"} and role == "citizenship":
         _append_unique(out, seen, "CITIZENSHIP", start, end, score)
 
 
@@ -207,8 +232,8 @@ def _convert_entity(
     ctx = _ctx(text, start, end)
 
     _add_name_roles(out, seen, label, start, end, score, ctx)
-    _add_address_role(out, seen, label, start, end, score, ctx)
-    _add_location_roles(out, seen, label, start, end, score, ctx)
+    _add_address_role(text, out, seen, label, start, end, score)
+    _add_location_roles(text, out, seen, label, start, end, score)
     _add_issuer_role(out, seen, label, start, end, score, ctx)
 
 
