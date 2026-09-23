@@ -12,10 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Validate compose
-        env:
-          DOMAIN: example.com
-          ACME_EMAIL: ci@example.com
-        run: docker compose config --quiet
+        run: |
+          cp .env.example .env
+          sed -i 's/^DOMAIN=.*/DOMAIN=example.com/' .env
+          sed -i 's/^ACME_EMAIL=.*/ACME_EMAIL=ci@example.com/' .env
+          docker compose config --quiet
       - name: Build proxy image
         run: docker build -t alfa-vibe-iac-sonar-test .
       - name: Prepare snapshot
