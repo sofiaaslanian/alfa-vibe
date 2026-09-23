@@ -49,6 +49,7 @@ _ADDR_FLAT_RE = re.compile(r"(?i)((?:кв\.|квартира)\s*\d+)")
 _ADDR_CORP_RE = re.compile(r"(?i)((?:корп\.|корпус|стр\.|строен\w*)\s*\d+[А-ЯA-Z]?)")
 
 _ADDRESS_PREFIX_BY_PART = {
+    "city": re.compile(r"(?i)^(?:г\.|город)\s*"),
     "street": re.compile(rf"(?i)^{_ADDR_STREET_TYPE}\s+"),
     "house": re.compile(r"(?i)^(?:д\.|дом)\s*"),
     "flat": re.compile(r"(?i)^(?:кв\.|квартира)\s*"),
@@ -148,6 +149,45 @@ def split_cardholder_span(
         )
         for m, lab in zip(matches, labels)
     ]
+
+
+def normalize_address_part(
+    text: str,
+    finding: Finding,
+) -> Finding:
+    """Canonicalize one already-classified ADDRESS component.
+
+    Detector-specific spans may include a role label (e.g. "ул. Баумана",
+    "д. 7"). Structural normalization owns the final mask boundary and must
+    be idempotent for parts that are already clean.
+    """
+    part = getattr(finding, "part", "") or ""
+    prefix_re = _ADDRESS_PREFIX_BY_PART.get(part)
+    if prefix_re is None:
+        return finding
+
+    raw = text[finding.start:finding.end]
+    prefix = prefix_re.match(raw)
+    if not prefix:
+        return finding
+
+    start = finding.start + prefix.end()
+    end = finding.end
+    while start < end and text[start].isspace():
+        start += 1
+    if start >= end:
+        return finding
+
+    return Finding(
+        "ADDRESS",
+        start,
+        end,
+        finding.score,
+        finding.detector,
+        getattr(finding, "decision", "mask"),
+        getattr(finding, "reason", "") or "",
+        part=part,
+    )
 
 
 def _append_address_part(
