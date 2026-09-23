@@ -43,6 +43,8 @@ jobs:
         run: pytest -q
       - name: Install ML dependencies
         run: python -m pip install --require-hashes -r requirements-ner.lock
+      - name: Address findings diagnostic
+        run: python scripts/debug_address_findings.py
       - name: Frozen stage 1
         run: python scripts/eval_stage1_identification.py
       - name: Frozen stage 2
