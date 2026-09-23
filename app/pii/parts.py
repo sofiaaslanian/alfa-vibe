@@ -21,7 +21,7 @@ _LAT_TOKEN_RE = re.compile(r"[A-Z][A-Za-z\-]*")
 # removes role labels such as "ул.", "д.", "кв." from the protected value.
 _ADDR_INDEX_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
 _ADDR_CITY_RE = re.compile(
-    r"(?i)(?:(?:г\.|город)\s*)?([А-ЯЁ][А-Яа-яЁё\-]+)"
+    r"(?:(?i:г\.|город)\s*)?([А-ЯЁ][А-Яа-яЁё\-]+)"
 )
 _ADDR_STREET_TYPE = (
     r"(?:ул\.|улиц(?:а|е|у)|пр\.|пр\-т|проспект(?:е|у)?|просп\.|"
@@ -29,10 +29,10 @@ _ADDR_STREET_TYPE = (
     r"наб\.|набережн(?:ая|ой)|пл\.|площад(?:ь|и))"
 )
 _ADDR_STREET_RE = re.compile(
-    rf"(?i)("
-    rf"{_ADDR_STREET_TYPE}\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
+    rf"("
+    rf"(?i:{_ADDR_STREET_TYPE})\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
     rf"|"
-    rf"[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+{_ADDR_STREET_TYPE}"
+    rf"[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+(?i:{_ADDR_STREET_TYPE})"
     rf")"
 )
 _ADDR_HOUSE_RE = re.compile(r"(?i)((?:д\.|дом)\s*\d+[А-ЯA-Z]?)")
@@ -40,9 +40,9 @@ _ADDR_HOUSE_RE = re.compile(r"(?i)((?:д\.|дом)\s*\d+[А-ЯA-Z]?)")
 # The address role has already been validated upstream; here we only extract
 # the semantic house value, not the street label.
 _ADDR_BARE_HOUSE_RE = re.compile(
-    rf"(?i)(?:"
-    rf"{_ADDR_STREET_TYPE}\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
-    rf"|[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+{_ADDR_STREET_TYPE}"
+    rf"(?:"
+    rf"(?i:{_ADDR_STREET_TYPE})\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
+    rf"|[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+(?i:{_ADDR_STREET_TYPE})"
     rf")\s+(\d+[А-ЯA-Z]?)"
 )
 _ADDR_FLAT_RE = re.compile(r"(?i)((?:кв\.|квартира)\s*\d+)")
