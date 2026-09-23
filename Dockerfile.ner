@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    NER_ENABLED=1 \
+    NER_LOCAL=1
+
+COPY requirements.txt requirements.txt
+COPY requirements-ner.txt requirements-ner.txt
+RUN pip install --no-cache-dir -r requirements-ner.txt
+
+COPY app ./app
+
+# Warm/download model at image build, then run offline in deployment.
+ARG NER_MODEL=redmadrobot-rnd/rubert-base-pii-ner
+ENV NER_MODEL=${NER_MODEL}
+RUN python -c "from transformers import AutoTokenizer, AutoModelForTokenClassification; n='${NER_MODEL}'; AutoTokenizer.from_pretrained(n); AutoModelForTokenClassification.from_pretrained(n)"
+
+ENV HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
+
+EXPOSE 8090
+CMD ["uvicorn", "app.ner_api:app", "--host", "0.0.0.0", "--port", "8090", "--workers", "1"]
