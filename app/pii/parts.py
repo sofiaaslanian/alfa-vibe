@@ -124,6 +124,109 @@ def split_cardholder_span(
     ]
 
 
+def _append_address_part(
+    found: list[Finding],
+    covered: list[tuple[int, int]],
+    *,
+    start: int,
+    rel_start: int,
+    rel_end: int,
+    part: str,
+    score: float,
+    detector: str,
+    decision: str,
+    reason: str,
+) -> None:
+    span_start, span_end = start + rel_start, start + rel_end
+    overlaps = any(
+        not (span_end <= old_start or span_start >= old_end)
+        for old_start, old_end in covered
+    )
+    if overlaps:
+        return
+    covered.append((span_start, span_end))
+    found.append(
+        Finding(
+            "ADDRESS",
+            span_start,
+            span_end,
+            score,
+            detector,
+            decision,
+            reason,
+            part=part,
+        )
+    )
+
+
+def _collect_address_parts(
+    text: str,
+    start: int,
+    end: int,
+    score: float,
+    detector: str,
+    decision: str,
+    reason: str,
+) -> list[Finding]:
+    chunk = text[start:end]
+    found: list[Finding] = []
+    covered: list[tuple[int, int]] = []
+    patterns = (
+        (_ADDR_INDEX_RE, "index"),
+        (_ADDR_STREET_RE, "street"),
+        (_ADDR_HOUSE_RE, "house"),
+        (_ADDR_FLAT_RE, "flat"),
+        (_ADDR_CORP_RE, "building"),
+    )
+    for regex, part in patterns:
+        for match in regex.finditer(chunk):
+            _append_address_part(
+                found,
+                covered,
+                start=start,
+                rel_start=match.start(1),
+                rel_end=match.end(1),
+                part=part,
+                score=score,
+                detector=detector,
+                decision=decision,
+                reason=reason,
+            )
+
+    for match in _ADDR_CITY_RE.finditer(chunk):
+        before = len(found)
+        _append_address_part(
+            found,
+            covered,
+            start=start,
+            rel_start=match.start(1),
+            rel_end=match.end(1),
+            part="city",
+            score=score,
+            detector=detector,
+            decision=decision,
+            reason=reason,
+        )
+        if len(found) > before:
+            break
+    return found
+
+
+def _address_parts_cover_alnum(
+    text: str,
+    start: int,
+    end: int,
+    findings: list[Finding],
+) -> bool:
+    covered = {
+        index
+        for finding in findings
+        for index in range(finding.start, finding.end)
+        if text[index].isalnum()
+    }
+    return all(not text[index].isalnum() or index in covered for index in range(start, end))
+
+
 def split_address_span(
     text: str,
     start: int,
@@ -134,51 +237,28 @@ def split_address_span(
     decision: str = "mask",
     reason: str = "",
 ) -> list[Finding]:
-    """Emit city / street / house / flat (and index) inside an ADDRESS span."""
-    chunk = text[start:end]
-    found: list[Finding] = []
-    covered: list[tuple[int, int]] = []
-
-    def _add(rel_s: int, rel_e: int, part: str) -> None:
-        s, e = start + rel_s, start + rel_e
-        if any(not (e <= a or s >= b) for a, b in covered):
-            return
-        covered.append((s, e))
-        found.append(
-            Finding("ADDRESS", s, e, score, detector, decision, reason, part=part)
-        )
-
-    for m in _ADDR_INDEX_RE.finditer(chunk):
-        _add(m.start(1), m.end(1), "index")
-    for m in _ADDR_STREET_RE.finditer(chunk):
-        _add(m.start(1), m.end(1), "street")
-    for m in _ADDR_HOUSE_RE.finditer(chunk):
-        _add(m.start(1), m.end(1), "house")
-    for m in _ADDR_FLAT_RE.finditer(chunk):
-        _add(m.start(1), m.end(1), "flat")
-    for m in _ADDR_CORP_RE.finditer(chunk):
-        _add(m.start(1), m.end(1), "building")
-    # City: first capital token before street, if not already covered
-    for m in _ADDR_CITY_RE.finditer(chunk):
-        s, e = start + m.start(1), start + m.end(1)
-        if any(not (e <= a or s >= b) for a, b in covered):
-            continue
-        _add(m.start(1), m.end(1), "city")
-        break
-
-    if not found:
-        return [Finding("ADDRESS", start, end, score, detector, decision, reason, part="")]
-
-    # If parts leave alphanumeric gaps inside the original span, keep the whole
-    # span so mask baselines (full-address redact) stay exact.
-    covered_alnum = set()
-    for f in found:
-        for i in range(f.start, f.end):
-            if text[i].isalnum():
-                covered_alnum.add(i)
-    gap = any(
-        text[i].isalnum() and i not in covered_alnum for i in range(start, end)
+    """Emit semantic address parts when they fully cover the original value."""
+    found = _collect_address_parts(
+        text,
+        start,
+        end,
+        score,
+        detector,
+        decision,
+        reason,
     )
-    if gap:
-        return [Finding("ADDRESS", start, end, score, detector, decision, reason, part="")]
+    fallback = Finding(
+        "ADDRESS",
+        start,
+        end,
+        score,
+        detector,
+        decision,
+        reason,
+        part="",
+    )
+    if not found or not _address_parts_cover_alnum(text, start, end, found):
+        return [fallback]
     return found
+
+
