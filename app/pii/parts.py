@@ -17,23 +17,39 @@ _FIO_TOKEN_RE = re.compile(r"[А-ЯЁA-Z][А-Яа-яЁёA-Za-z\-]*")
 _LAT_TOKEN_RE = re.compile(r"[A-Z][A-Za-z\-]*")
 
 # Address component extractors (inside an already-validated ADDRESS span).
-_ADDR_INDEX_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
+# Structural words (ул./д./кв./город/…) describe the schema; only their values
+# are PII. Keeping those labels outside the findings preserves prompt semantics.
+_ADDR_INDEX_RE = re.compile(r"(?<!\d)(?P<value>\d{6})(?!\d)")
 _ADDR_CITY_RE = re.compile(
-    r"(?i)(?:(?:г\.|город)\s*)?([А-ЯЁ][А-Яа-яЁё\-]+)"
+    r"(?i)(?:(?:г\.|город)\s*)?(?P<value>[А-ЯЁ][А-Яа-яЁё\-]+)"
 )
-_ADDR_STREET_RE = re.compile(
-    r"(?i)("
-    r"(?:ул\.|улица|пр\.|пр\-т|проспект|пер\.|переулок|ш\.|шоссе|б\-р|бульвар|наб\.|пл\.|площадь)"
-    r"\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
-    r"|"
-    r"[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+"
-    r"(?:ул\.|улица|пр\.|пр\-т|проспект|пер\.|переулок|ш\.|шоссе|б\-р|бульвар|наб\.|пл\.|площадь)"
-    r")"
+_ADDR_STREET_LABEL = (
+    r"(?:ул\.|улица|улице|улицу|пр\.|пр\-т|проспект|проспекте|"
+    r"пер\.|переулок|переулке|ш\.|шоссе|б\-р|бульвар|бульваре|"
+    r"наб\.|набережная|набережной|пл\.|площадь|площади)"
 )
-# Include role prefixes in house/flat spans so redact matches full-address baselines.
-_ADDR_HOUSE_RE = re.compile(r"(?i)((?:д\.|дом)\s*\d+[А-ЯA-Z]?)")
-_ADDR_FLAT_RE = re.compile(r"(?i)((?:кв\.|квартира)\s*\d+)")
-_ADDR_CORP_RE = re.compile(r"(?i)((?:корп\.|корпус|стр\.|строен\w*)\s*\d+[А-ЯA-Z]?)")
+_ADDR_STREET_WORDS = r"[А-ЯЁа-яёA-Za-z0-9\-\.]+(?:\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+){0,2}"
+_ADDR_STREET_PREFIX_RE = re.compile(
+    rf"(?i){_ADDR_STREET_LABEL}\s+(?P<value>{_ADDR_STREET_WORDS})"
+)
+_ADDR_STREET_SUFFIX_RE = re.compile(
+    rf"(?i)(?P<value>{_ADDR_STREET_WORDS})\s+{_ADDR_STREET_LABEL}"
+)
+_ADDR_HOUSE_RE = re.compile(r"(?i)(?:д\.|дом)\s*(?P<value>\d+[А-ЯA-Z]?)")
+_ADDR_FLAT_RE = re.compile(r"(?i)(?:кв\.|квартира)\s*(?P<value>\d+)")
+_ADDR_CORP_RE = re.compile(
+    r"(?i)(?:корп\.|корпус|стр\.|строен\w*)\s*(?P<value>\d+[А-ЯA-Z]?)"
+)
+# Spoken addresses may omit the house label: «улица Ленина 5».
+_ADDR_BARE_NUMBER_RE = re.compile(r"(?<!\d)(?P<value>\d+[А-ЯA-Z]?)(?!\d)")
+_ADDR_SYNTAX_RE = re.compile(
+    r"(?i)(?<![А-Яа-яЁёA-Za-z0-9])(?:"
+    r"г|город|ул|улица|улице|улицу|пр|пр-т|проспект|проспекте|"
+    r"пер|переулок|переулке|ш|шоссе|б-р|бульвар|бульваре|"
+    r"наб|набережная|набережной|пл|площадь|площади|"
+    r"д|дом|кв|квартира|корп|корпус|стр|строен\w*|на"
+    r")(?=$|[^А-Яа-яЁёA-Za-z0-9])\.?"
+)
 
 
 def classify_fio_parts(tokens: list[str]) -> list[str]:
@@ -173,10 +189,12 @@ def _collect_address_parts(
     covered: list[tuple[int, int]] = []
     patterns = (
         (_ADDR_INDEX_RE, "index"),
-        (_ADDR_STREET_RE, "street"),
+        (_ADDR_STREET_PREFIX_RE, "street"),
+        (_ADDR_STREET_SUFFIX_RE, "street"),
         (_ADDR_HOUSE_RE, "house"),
         (_ADDR_FLAT_RE, "flat"),
         (_ADDR_CORP_RE, "building"),
+        (_ADDR_BARE_NUMBER_RE, "house"),
     )
     for regex, part in patterns:
         for match in regex.finditer(chunk):
@@ -184,8 +202,8 @@ def _collect_address_parts(
                 found,
                 covered,
                 start=start,
-                rel_start=match.start(1),
-                rel_end=match.end(1),
+                rel_start=match.start("value"),
+                rel_end=match.end("value"),
                 part=part,
                 score=score,
                 detector=detector,
@@ -199,8 +217,8 @@ def _collect_address_parts(
             found,
             covered,
             start=start,
-            rel_start=match.start(1),
-            rel_end=match.end(1),
+            rel_start=match.start("value"),
+            rel_end=match.end("value"),
             part="city",
             score=score,
             detector=detector,
@@ -224,6 +242,12 @@ def _address_parts_cover_alnum(
         for index in range(finding.start, finding.end)
         if text[index].isalnum()
     }
+    # Structural address labels are intentionally left visible. They carry no
+    # personal value and help the downstream LLM keep the sentence structure.
+    for match in _ADDR_SYNTAX_RE.finditer(text[start:end]):
+        for index in range(start + match.start(), start + match.end()):
+            if text[index].isalnum():
+                covered.add(index)
     return all(not text[index].isalnum() or index in covered for index in range(start, end))
 
 
