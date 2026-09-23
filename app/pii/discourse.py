@@ -134,19 +134,39 @@ def should_skip_person(text: str, start: int, end: int) -> bool:
     return not is_personal_person_mention(text, start, end)
 
 
+ADDRESS_STRONG_PERSONAL_RE = re.compile(
+    r"(?i)(?:"
+    r"\bживу\b|\bжив[её]м\b|прожива|прописан|зарегистрирован"
+    r"|мой\s+адрес|наш\s+адрес|домашн\w*\s+адрес"
+    r"|адрес\s+(?:проживани|регистрац|клиента|для\s+корреспонденц|доставк)"
+    r"|доставьте|принесите|привез\w*|отправьте\s+(?:на|по)"
+    r")"
+)
+
+
 def is_personal_address_mention(text: str, start: int, end: int) -> bool:
-    """Personal home/delivery address vs public/service place."""
+    """Personal home/delivery address vs public/service place.
+
+    Public/service framing wins over generic location syntax such as
+    «по адресу». Only an explicit owner/delivery cue can override it.
+    """
     from app.pii.claims import ADDRESS_PERSONAL_RE, ADDRESS_PUBLIC_RE
 
     left = _left(text, start)
     ctx = _ctx(text, start, end)
     value = text[start:end]
+    strong_personal = bool(
+        ADDRESS_STRONG_PERSONAL_RE.search(left)
+        or ADDRESS_STRONG_PERSONAL_RE.search(ctx)
+    )
     personal = bool(ADDRESS_PERSONAL_RE.search(left) or ADDRESS_PERSONAL_RE.search(ctx))
     public = bool(ADDRESS_PUBLIC_RE.search(left) or ADDRESS_PUBLIC_RE.search(ctx))
 
-    if public and not personal:
+    if public and not strong_personal:
         return False
-    if personal:
+    if strong_personal:
+        return True
+    if personal and not public:
         return True
     if re.search(r"(?i)адрес", left):
         return not public
@@ -194,26 +214,90 @@ PHONE_PERSONAL_RE = re.compile(
     r")"
 )
 
+EMAIL_PERSONAL_RE = re.compile(
+    r"(?i)(?:"
+    r"email\s+клиент|e-?mail\s+клиент|почт\w*\s+клиент"
+    r"|мо[яей]\s+(?:почт|email|e-?mail)|личн\w*\s+(?:почт|email|e-?mail)"
+    r"|контакт\w*\s+клиент"
+    r")"
+)
+NON_PERSONAL_TEMPLATE_RE = re.compile(
+    r"(?i)(?:"
+    r"пример|шаблон|образец|placeholder|документац|инструкц|тестов\w*\s+данн"
+    r")"
+)
+PUBLIC_CONTACT_ROLE_RE = re.compile(
+    r"(?i)(?:"
+    r"офис|отделен\w*|филиал|банк\w*|колл[\-\s]?центр|call[\-\s]?center"
+    r"|горяч\w*\s+лини|служб\w*\s+поддержк|контакт[-\s]?центр"
+    r"|публичн\w*\s+номер|служебн\w*\s+(?:телефон|контакт|почт)"
+    r")"
+)
+TECHNICAL_IDENTIFIER_ROLE_RE = re.compile(
+    r"(?i)(?:"
+    r"серийн\w*\s+номер|инвентарн\w*\s+номер"
+    r"|код\s+(?:партии|товара|операции|записи|заказа|заявки)"
+    r"|номер\s+(?:заказа|договора|заявки|сч[её]та|посылки)"
+    r"|артикул|штрих[\-\s]?код|tracking|трек[\-\s]?номер|imei"
+    r")"
+)
+PAYMENT_CARD_PERSONAL_RE = re.compile(
+    r"(?i)(?:"
+    r"номер\s+карт|карт[аы]\s+(?:клиент|заявител)|мо[яей]\s+карт"
+    r"|\bpan\b|visa|mastercard|master[\-\s]?card|\bмир\b|оплат\w*\s+карт"
+    r")"
+)
+
 
 def is_personal_phone_mention(text: str, start: int, end: int) -> bool:
-    """Keep personal phones; drop Alfa hotline / support-desk numbers."""
+    """Keep personal phones; drop public/service contact roles."""
     from app.pii.public_contacts import (
         has_service_phone_context,
         is_public_service_phone,
     )
 
     value = text[start:end]
+    ctx = _ctx(text, start, end, 120)
+    personal = bool(PHONE_PERSONAL_RE.search(ctx))
     if is_public_service_phone(value):
         return False
-    if has_service_phone_context(text, start, end) and not PHONE_PERSONAL_RE.search(
-        text[max(0, start - 100) : end + 40]
-    ):
+    if PUBLIC_CONTACT_ROLE_RE.search(ctx) and not personal:
+        return False
+    if has_service_phone_context(text, start, end) and not personal:
         return False
     return True
 
 
 def should_skip_phone(text: str, start: int, end: int) -> bool:
     return not is_personal_phone_mention(text, start, end)
+
+
+def is_personal_email_mention(text: str, start: int, end: int) -> bool:
+    """A syntactically valid email is PII unless context marks a template/service role."""
+    ctx = _ctx(text, start, end, 120)
+    personal = bool(EMAIL_PERSONAL_RE.search(ctx))
+    if NON_PERSONAL_TEMPLATE_RE.search(ctx) and not personal:
+        return False
+    if PUBLIC_CONTACT_ROLE_RE.search(ctx) and not personal:
+        return False
+    return True
+
+
+def should_skip_email(text: str, start: int, end: int) -> bool:
+    return not is_personal_email_mention(text, start, end)
+
+
+def is_personal_payment_card_mention(text: str, start: int, end: int) -> bool:
+    """Luhn/shape proves a PAN candidate, while role decides whether it is a card."""
+    ctx = _ctx(text, start, end, 120)
+    personal = bool(PAYMENT_CARD_PERSONAL_RE.search(ctx))
+    if TECHNICAL_IDENTIFIER_ROLE_RE.search(ctx) and not personal:
+        return False
+    return True
+
+
+def should_skip_payment_card(text: str, start: int, end: int) -> bool:
+    return not is_personal_payment_card_mention(text, start, end)
 
 
 # ── Dates: birth vs holiday / event / publication ──────────────────────────
