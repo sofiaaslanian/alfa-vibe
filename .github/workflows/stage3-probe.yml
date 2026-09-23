@@ -27,6 +27,15 @@ jobs:
           echo "=== HTTP /health ==="
           curl -v --connect-timeout 5 --max-time 10 http://135.106.220.67/health
           echo
-          echo "=== HTTPS /ready ==="
-          curl -vk --connect-timeout 5 --max-time 10 https://135.106.220.67/ready
+          echo "=== /systems ==="
+          curl -sS --connect-timeout 5 --max-time 10 http://135.106.220.67/systems
+          echo
+          echo "=== /process contract ==="
+          curl -sS --connect-timeout 5 --max-time 20 \
+            -X POST http://135.106.220.67/process \
+            -H "Content-Type: application/json" \
+            -d '{"payload":"Клиент Иван Петров, email ivan.petrov@mail.ru","payload_id":"stage3-probe-001"}'
+          echo
+          echo "=== /metrics excerpt ==="
+          curl -sS --connect-timeout 5 --max-time 10 http://135.106.220.67/metrics | head -n 40
           exit 0
