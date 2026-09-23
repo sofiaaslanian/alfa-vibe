@@ -64,9 +64,16 @@ def map_entity(entity: dict) -> Finding | None:
 # Letters / hyphen inside a name token — RuBERT often stops mid-subword (Пу|пкие).
 _WORD_CHAR_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁёІіЇїЄєҐґ'\-]")
 # Next Capitalized token after a single-name NER hit («Александр» + «Пушкин»).
-_NEXT_NAME_TOKEN_RE = re.compile(
-    r"^(\s+)([А-ЯЁ][а-яё]*(?:-[А-ЯЁа-яё]+)?|[A-Z][a-z]+(?:-[A-Za-z]+)?)\b"
+_NEXT_CYR_NAME_RE = re.compile(
+    r"^(\s+)([А-ЯЁ][а-яё]*(?:-[А-ЯЁа-яё]+)?)\b"
 )
+_NEXT_LAT_NAME_RE = re.compile(
+    r"^(\s+)([A-Z][a-z]+(?:-[A-Za-z]+)?)\b"
+)
+
+
+def _next_name_match(text: str):
+    return _NEXT_CYR_NAME_RE.match(text) or _NEXT_LAT_NAME_RE.match(text)
 _NOT_NAME_FOLLOW = frozenset(
     {
         "русский",
@@ -150,7 +157,7 @@ def _following_name_candidates(
     pending: list[Finding] = []
     cursor = finding.end
     while len(pending) < max_extra:
-        match = _NEXT_NAME_TOKEN_RE.match(text[cursor:])
+        match = _next_name_match(text[cursor:])
         if not match:
             break
         token = match.group(2)
