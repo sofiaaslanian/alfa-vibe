@@ -18,6 +18,17 @@ _LOCATION_LABELS = {"COUNTRY", "REGION", "DISTRICT", "CITY", "LOC", "LOCATION"}
 _ADDRESS_LABELS = {"ADDRESS", "REGION", "DISTRICT", "CITY", "STREET", "HOUSE", "LOC", "LOCATION"}
 _ORG_LABELS = {"ORG", "ORGANIZATION"}
 
+# redmadrobot-rnd/rubert-base-pii-ner has name + address hierarchy labels,
+# but no ORG label. PASSPORT_ISSUER therefore stays an explicit migration
+# fallback until the context model is replaced/extended.
+ML_COVERED_CONTEXT_TYPES = frozenset({
+    "PERSON",
+    "PLACE_OF_BIRTH",
+    "CITIZENSHIP",
+    "ADDRESS",
+    "CARDHOLDER_NAME",
+})
+
 _BIRTH_ROLE_RE = re.compile(
     r"(?i)(?:место\s+рожден|родил(?:ся|ась)|place\s+of\s+birth|birth\s*place)"
 )
