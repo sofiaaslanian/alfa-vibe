@@ -361,12 +361,23 @@ def detect_pii(
     enable_ner: bool | None = None,
     fail_closed_on_ner_error: bool | None = None,
 ) -> list[Finding]:
-    from app.pii.rules import detect_all_rules
+    """Run the canonical three-flow architecture.
+
+    1. FORMAT: format-defined rule flow.
+    2. FORMAT_CONTEXT: format candidate + contextual rule flow.
+    3. CONTEXT: ML-first contextual flow; labelled rule candidates remain as a
+       migration fallback until the contextual role model is fully deployed.
+    4. STRUCTURE: one shared atomic/composite normalization layer.
+    5. ELIGIBILITY + overlap resolver + masking downstream.
+    """
+    from app.pii.flows import run_detection_flows
+    from app.pii.structural import normalize_structures
     from app.pii.validate import sanitize_format_findings
 
-    findings = detect_all_rules(text)
     ner = get_ner()
     use_ner = ner.enabled if enable_ner is None else enable_ner
+    context_ml_findings: list[Finding] = []
+
     if use_ner:
         fail_closed = (
             os.getenv("NER_FAIL_CLOSED", "0") == "1"
@@ -377,11 +388,16 @@ def detect_pii(
             if enable_ner is True and not ner.enabled:
                 ner.enabled = True
                 ner.use_local = True
-            findings.extend(ner.detect(text))
+            context_ml_findings = ner.detect(text)
         except Exception:
             log.exception("NER detection failed")
             if fail_closed:
                 raise
+
+    findings = run_detection_flows(
+        text,
+        context_ml_findings=context_ml_findings,
+    )
     findings = sanitize_format_findings(text, findings)
-    findings = _normalize_structured_findings(text, findings)
+    findings = normalize_structures(text, findings)
     return resolve_overlaps(filter_findings(text, findings))
