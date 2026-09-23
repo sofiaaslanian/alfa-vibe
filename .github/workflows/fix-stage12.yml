@@ -23,4 +23,22 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.lock
       - run: python -m pip install --require-hashes -r requirements.lock
+      - name: Address splitter diagnostic
+        run: |
+          python - <<'PY'
+          from app.pii import rules
+          from app.pii.structural import normalize_structures
+          from app.pii.detect import detect_pii
+          text = "Я живу в Самаре на улице Ленина 5."
+          raw = rules._detect_address_candidate(text)
+          norm = normalize_structures(text, raw)
+          final = detect_pii(text, enable_ner=False)
+          def dump(name, fs):
+              print(name)
+              for f in fs:
+                  print(f.type, f.part, repr(text[f.start:f.end]), f.start, f.end, f.detector, f.decision)
+          dump("RAW", raw)
+          dump("NORM", norm)
+          dump("FINAL", final)
+          PY
       - run: pytest -q
