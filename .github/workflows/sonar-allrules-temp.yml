@@ -76,10 +76,15 @@ jobs:
           A="admin:$SONAR_PASS"; B=http://localhost:9000
           TOKEN=$(curl -s -u "$A" -X POST "$B/api/user_tokens/generate?name=ci" | jq -r .token)
           echo "::add-mask::$TOKEN"
+          curl -s -u "$A" -X POST "$B/api/projects/create" \
+            --data-urlencode "project=alfa-all" --data-urlencode "name=alfa-all"
+          echo
           for lang in py js css web docker yaml secrets xml json; do
+            echo -n "assign $lang: "
             curl -s -u "$A" -X POST "$B/api/qualityprofiles/add_project" \
               --data-urlencode "language=$lang" --data-urlencode "project=alfa-all" \
-              --data-urlencode "qualityProfile=all-$lang" || true
+              --data-urlencode "qualityProfile=all-$lang"
+            echo
           done
           docker run --rm --network host -e SONAR_HOST_URL=$B -e SONAR_TOKEN=$TOKEN \
             -v /tmp/src:/usr/src sonarsource/sonar-scanner-cli \
@@ -106,10 +111,15 @@ jobs:
           A="admin:$SONAR_PASS"; B=http://localhost:9000
           TOKEN=$(curl -s -u "$A" -X POST "$B/api/user_tokens/generate?name=cc" | jq -r .token)
           echo "::add-mask::$TOKEN"
+          curl -s -u "$A" -X POST "$B/api/projects/create" \
+            --data-urlencode "project=alfa-cc" --data-urlencode "name=alfa-cc"
+          echo
           for lang in py js; do
+            echo -n "assign cc $lang: "
             curl -s -u "$A" -X POST "$B/api/qualityprofiles/add_project" \
               --data-urlencode "language=$lang" --data-urlencode "project=alfa-cc" \
-              --data-urlencode "qualityProfile=cc-$lang" || true
+              --data-urlencode "qualityProfile=cc-$lang"
+            echo
           done
           rm -rf /tmp/src/.scannerwork
           docker run --rm --network host -e SONAR_HOST_URL=$B -e SONAR_TOKEN=$TOKEN \
