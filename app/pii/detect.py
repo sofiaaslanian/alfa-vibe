@@ -336,7 +336,10 @@ def detect_pii(
 
     if use_ner:
         fail_closed = (
-            os.getenv("NER_FAIL_CLOSED", "0") == "1"
+            os.getenv(
+                "CONTEXT_ML_FAIL_CLOSED",
+                os.getenv("NER_FAIL_CLOSED", "1"),
+            ) == "1"
             if fail_closed_on_ner_error is None
             else fail_closed_on_ner_error
         )
@@ -356,9 +359,11 @@ def detect_pii(
             else:
                 context_ml_findings = ner.detect(text)
         except Exception:
-            log.exception("NER detection failed")
+            log.exception("context ML detection failed")
             if fail_closed:
                 raise
+            # Compatibility mode only: an explicit fail-open policy may fall
+            # back to legacy context rules by leaving findings as None.
 
     findings = run_detection_flows(
         text,
