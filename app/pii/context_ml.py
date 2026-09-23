@@ -43,6 +43,12 @@ _ISSUER_ROLE_RE = re.compile(
     r"(?i)(?:кем\s+выдан\s+паспорт|паспорт\s+выдан|"
     r"орган(?:ом)?\s+выдач\w*(?:\s+паспорт\w*)?|выдавш\w*\s+орган)"
 )
+_ADDRESS_ROLE_RE = re.compile(
+    r"(?i)(?:мой\s+адрес|домашн\w*\s+адрес|адрес\s+(?:проживани|регистрац|"
+    r"клиента|доставк|для\s+корреспонденц)|живу|прожива|прописан|"
+    r"зарегистрирован|улиц|ул\.|проспект|пр\.|переулок|пер\.|"
+    r"шоссе|\bд\.|дом\s+\d|кв\.|квартира)"
+)
 
 
 def _label(entity: dict[str, Any]) -> str:
@@ -116,7 +122,9 @@ def raw_entities_to_context_findings(
             if _CARDHOLDER_ROLE_RE.search(ctx):
                 add("CARDHOLDER_NAME", start, end, score, part)
 
-        # Generic location/address components.
+        # Generic location/address components become ADDRESS only when the
+        # business context says "address". STREET/HOUSE are address-specific
+        # enough to be accepted directly; CITY/REGION/etc. are ambiguous.
         if label in _ADDRESS_LABELS:
             part = {
                 "REGION": "region",
@@ -125,7 +133,8 @@ def raw_entities_to_context_findings(
                 "STREET": "street",
                 "HOUSE": "house",
             }.get(label, "")
-            add("ADDRESS", start, end, score, part)
+            if label in {"ADDRESS", "STREET", "HOUSE"} or _ADDRESS_ROLE_RE.search(ctx):
+                add("ADDRESS", start, end, score, part)
 
         # Business role: place of birth.
         if label in _LOCATION_LABELS and _BIRTH_ROLE_RE.search(ctx):
