@@ -45,16 +45,18 @@ ML_COVERED_CONTEXT_TYPES = frozenset({
     "CITIZENSHIP",
     "ADDRESS",
     "CARDHOLDER_NAME",
+    "PASSPORT_ISSUER",
 })
 
 _BIRTH_ROLE_RE = re.compile(
     r"(?i)(?:место\s+рожден|родил(?:ся|ась)|place\s+of\s+birth|birth\s*place)"
 )
 _CITIZEN_ROLE_RE = re.compile(
-    r"(?i)(?:гражданств|гражданин(?:ка)?|citizen(?:ship)?)"
+    r"(?i)(?:гражданств|граждан(?:ин\w*|к\w*)|citizen(?:ship)?)"
 )
 _CARDHOLDER_ROLE_RE = re.compile(
     r"(?i)(?:имя\s+держателя\s+карты|держател\w*\s+карты|имя\s+на\s+карт|"
+    r"карт\w*.{0,50}имя\s+держател\w*|имя\s+держател\w*.{0,50}карт\w*|"
     r"embossed\s+name|name\s+on\s+card|cardholder(?:\s+name)?)"
 )
 _ISSUER_ROLE_RE = re.compile(
