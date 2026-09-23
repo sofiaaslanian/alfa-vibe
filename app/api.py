@@ -253,6 +253,62 @@ async def proxy_chat(
         TPS.labels(route="proxy").inc(max(len(body.text) / 4, 1))
 
 
+def _demo_llm_result(llm: AlfaGenClient, masked: str, skip_llm: bool):
+    use_llm = not skip_llm and bool(llm.api_key) and llm.api_key != "your-key-here"
+    if not use_llm:
+        status = "skipped_by_flag" if skip_llm else "skipped_no_key"
+        answer = (
+            "[LLM пропущен — контур защиты показан без вызова модели. "
+            "В masked_prompt не должно быть открытых ПД.]"
+        )
+        return answer, status
+    try:
+        return llm.chat(masked), "ok"
+    except Exception as exc:
+        log.warning("demo LLM failed: %s", exc)
+        return None, f"error:{exc.__class__.__name__}"
+
+
+def _demo_restore(
+    cfg: Config,
+    system: str,
+    state,
+    answer: str | None,
+    masked: str,
+    consumer: str,
+    op_id: str,
+) -> str | None:
+    if not cfg.systems[system].allow_demask:
+        return None
+    try:
+        aad = f"proxy:{consumer}:{op_id}"
+        mapping = json.loads(decrypt(state.tokens_enc, aad)) if state.tokens_enc else {}
+        source = answer if answer and "⟦PII_" in answer else masked
+        return restore_scoped_tokens(source, mapping)
+    except Exception:
+        log.exception("demo demask failed")
+        return None
+
+
+def _demo_findings_payload(text: str, findings) -> list[dict]:
+    payload: list[dict] = []
+    for finding in findings:
+        item = {
+            "type": finding.type,
+            "start": finding.start,
+            "end": finding.end,
+            "value": text[finding.start : finding.end],
+            "score": finding.score,
+            "detector": finding.detector,
+            "decision": getattr(finding, "decision", "mask") or "mask",
+            "reason": getattr(finding, "reason", "") or "",
+        }
+        if getattr(finding, "part", ""):
+            item["part"] = finding.part
+        payload.append(item)
+    return payload
+
+
 @app.post("/demo/run")
 async def demo_run(
     request: Request,
@@ -268,70 +324,47 @@ async def demo_run(
     cfg: Config = request.app.state.config
     svc: ProcessService = request.app.state.process
     llm: AlfaGenClient = request.app.state.llm
-
     system = _system(request, x_system) or "demo"
     _check_system(cfg, system, required=True)
     consumer = x_consumer_id or "demo-ui"
     op_id = body.operation_id or str(uuid.uuid4())
-
     stages_ms: dict[str, float] = {}
-    t_all = time.perf_counter()
+    total_started = time.perf_counter()
 
-    t0 = time.perf_counter()
+    started = time.perf_counter()
     findings = svc.detect(body.text, system)
-    stages_ms["detect"] = round((time.perf_counter() - t0) * 1000, 2)
+    stages_ms["detect"] = round((time.perf_counter() - started) * 1000, 2)
 
-    t0 = time.perf_counter()
+    started = time.perf_counter()
     try:
         masked, state = svc.proxy_protect(
-            body.text, consumer_id=consumer, operation_id=op_id, system=system
+            body.text,
+            consumer_id=consumer,
+            operation_id=op_id,
+            system=system,
         )
     except ProcessError as exc:
         raise HTTPException(exc.status, exc.detail) from exc
-    stages_ms["mask"] = round((time.perf_counter() - t0) * 1000, 2)
+    stages_ms["mask"] = round((time.perf_counter() - started) * 1000, 2)
     stages_ms["state"] = stages_ms["mask"]
 
     leaked = _open_pii_leaked(body.text, findings, masked)
+    started = time.perf_counter()
+    answer, llm_status = _demo_llm_result(llm, masked, body.skip_llm)
+    stages_ms["llm"] = round((time.perf_counter() - started) * 1000, 2)
 
-    answer = None
-    llm_status = "skipped"
-    t0 = time.perf_counter()
-    use_llm = not body.skip_llm and bool(llm.api_key) and llm.api_key != "your-key-here"
-    if use_llm:
-        try:
-            answer = llm.chat(masked)
-            llm_status = "ok"
-        except Exception as exc:
-            log.warning("demo LLM failed: %s", exc)
-            answer = None
-            llm_status = f"error:{exc.__class__.__name__}"
-    else:
-        llm_status = "skipped_no_key" if not body.skip_llm else "skipped_by_flag"
-        answer = (
-            "[LLM пропущен — контур защиты показан без вызова модели. "
-            "В masked_prompt не должно быть открытых ПД.]"
-        )
-    stages_ms["llm"] = round((time.perf_counter() - t0) * 1000, 2)
-
-    restored = None
-    t0 = time.perf_counter()
-    sys_cfg = cfg.systems[system]
-    if sys_cfg.allow_demask:
-        try:
-            aad = f"proxy:{consumer}:{op_id}"
-            mapping = (
-                json.loads(decrypt(state.tokens_enc, aad)) if state.tokens_enc else {}
-            )
-            if answer and "⟦PII_" in answer:
-                restored = restore_scoped_tokens(answer, mapping)
-            else:
-                # Prove demask: masked wire → original
-                restored = restore_scoped_tokens(masked, mapping)
-        except Exception:
-            log.exception("demo demask failed")
-            restored = None
-    stages_ms["demask"] = round((time.perf_counter() - t0) * 1000, 2)
-    stages_ms["total"] = round((time.perf_counter() - t_all) * 1000, 2)
+    started = time.perf_counter()
+    restored = _demo_restore(
+        cfg,
+        system,
+        state,
+        answer,
+        masked,
+        consumer,
+        op_id,
+    )
+    stages_ms["demask"] = round((time.perf_counter() - started) * 1000, 2)
+    stages_ms["total"] = round((time.perf_counter() - total_started) * 1000, 2)
 
     LATENCY.labels(route="demo", mode="run").observe(stages_ms["total"] / 1000.0)
     RPS.labels(route="demo", mode="run", status="200").inc()
@@ -341,20 +374,7 @@ async def demo_run(
         "operation_id": op_id,
         "system": system,
         "original": body.text,
-        "findings": [
-            {
-                "type": f.type,
-                "start": f.start,
-                "end": f.end,
-                "value": body.text[f.start : f.end],
-                "score": f.score,
-                "detector": f.detector,
-                "decision": getattr(f, "decision", "mask") or "mask",
-                "reason": getattr(f, "reason", "") or "",
-                **({"part": f.part} if getattr(f, "part", "") else {}),
-            }
-            for f in findings
-        ],
+        "findings": _demo_findings_payload(body.text, findings),
         "masked_prompt": masked,
         "answer": answer,
         "restored": restored,
