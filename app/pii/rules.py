@@ -539,6 +539,7 @@ DATE_ROLE_LABELS = {
     ],
     "issue": [
         r"дата\s+выдач\w*\s+паспорт",
+        r"дат[аы]\s+выдач\w*",
         r"паспорт\s+выдан",
         r"выдан",
     ],
@@ -622,7 +623,7 @@ def detect_passport_issue_date(text: str) -> list[Finding]:
 
 # --- passport ---
 PASSPORT_SPLIT_RE = re.compile(
-    r"серия\s+(\d{2}\s?\d{2})\s*,?\s*номер\s+(\d{6})",
+    r"серия(?:\s+паспорта?)?\s+(\d{2}\s?\d{2})\s*,?\s*номер\s+(\d{6})",
     re.IGNORECASE,
 )
 PASSPORT_ANCHORED_RE = re.compile(
@@ -980,7 +981,8 @@ CITIZEN_LABEL_RE = re.compile(
     r")"
     r"\s*[:\-—–]?\s*"
     r"|"
-    r"гражданин(?:ка)?\s+",
+    # Morphological role: гражданин / гражданином / гражданка / гражданкой …
+    r"граждан(?:ин(?:ом|а|у|е)?|к(?:а|ой|е|у))\s+",
     re.IGNORECASE,
 )
 CITIZEN_VALUE_RE = re.compile(
@@ -1074,12 +1076,23 @@ def _issuer_label_allowed(text: str, match) -> bool:
     return not _has_any(right, [RX_REFERENCE, r"указано\s+в\s+справочник"])
 
 
+ISSUER_UNIT_PREFIX_RE = re.compile(
+    r"(?i)(?:"
+    r"отдел(?:ом|а|е)?|отделени(?:ем|я|е)|"
+    r"территориальн\w*\s+отдел\w*"
+    r")\s+"
+)
+
+
 def _issuer_value_position(text: str, position: int) -> int:
     date_match = DATE_NUM_RE.match(text, position) or DATE_TEXT_RE.match(text, position)
     if date_match:
         position = date_match.end()
     while position < len(text) and text[position] in " \t,;—–-":
         position += 1
+    unit = ISSUER_UNIT_PREFIX_RE.match(text, position)
+    if unit:
+        position = unit.end()
     return position
 
 
@@ -1111,7 +1124,7 @@ def detect_passport_issuer(text: str) -> list[Finding]:
 # --- cardholder ---
 CARDHOLDER_LABEL_RE = re.compile(
     r"(?:"
-    r"имя\s+держателя\s+карты"
+    r"имя\s+держателя(?:\s+карты)?"
     r"|держател\w*\s+карты"
     r"|имя\s+на\s+карт\w*"
     r"|embossed\s+name"
@@ -1139,8 +1152,14 @@ def _detect_cardholder_name_candidate(text: str) -> list[Finding]:
     out: list[Finding] = []
     for m in CARDHOLDER_LABEL_RE.finditer(text):
         left = _left(text, m.start(), ROLE_WINDOW)
-        if _has_any(left + m.group(0), CARDHOLDER_NEG):
+        label_ctx = left + m.group(0)
+        if _has_any(label_ctx, CARDHOLDER_NEG):
             continue
+        # Bare «имя держателя» is accepted only when the nearby discourse
+        # establishes a card role; this avoids turning arbitrary holders into PII.
+        if re.fullmatch(r"(?i)имя\s+держателя\s*[:\-—–]?\s*", m.group(0)):
+            if not re.search(r"(?i)карт\w*", left):
+                continue
         rest = text[m.end() :]
         vm = CARDHOLDER_VALUE_RE.match(rest)
         if not vm:
