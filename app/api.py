@@ -415,27 +415,30 @@ async def demo_evidence():
     )
     holdout_raw = _read_json(DOCS_DIR / "holdout_cases.json")
     eval_summary = None
-    if isinstance(eval_raw, dict):
+    if (
+        isinstance(eval_raw, dict)
+        and "by_type" in eval_raw
+        and "cases_total" in eval_raw
+        and eval_raw.get("span_metrics") is not None
+    ):
         # already slim or full report
-        if "by_type" in eval_raw and "cases_total" in eval_raw:
-            if eval_raw.get("span_metrics") is not None:
-                eval_summary = {
-                    "cases_total": eval_raw.get("cases_total"),
-                    "cases_passed": eval_raw.get("cases_passed"),
-                    "case_pass_rate": eval_raw.get("case_pass_rate"),
-                    "span_metrics": eval_raw.get("span_metrics"),
-                    "mask_accuracy": eval_raw.get("mask_accuracy"),
-                    "roundtrip_rate": eval_raw.get("roundtrip_rate"),
-                    "by_type": {
-                        k: {
-                            "passed": v.get("passed"),
-                            "cases": v.get("cases"),
-                            "f1": v.get("f1"),
-                            "failed_ids": v.get("failed_ids"),
-                        }
-                        for k, v in (eval_raw.get("by_type") or {}).items()
-                    },
+        eval_summary = {
+            "cases_total": eval_raw.get("cases_total"),
+            "cases_passed": eval_raw.get("cases_passed"),
+            "case_pass_rate": eval_raw.get("case_pass_rate"),
+            "span_metrics": eval_raw.get("span_metrics"),
+            "mask_accuracy": eval_raw.get("mask_accuracy"),
+            "roundtrip_rate": eval_raw.get("roundtrip_rate"),
+            "by_type": {
+                k: {
+                    "passed": v.get("passed"),
+                    "cases": v.get("cases"),
+                    "f1": v.get("f1"),
+                    "failed_ids": v.get("failed_ids"),
                 }
+                for k, v in (eval_raw.get("by_type") or {}).items()
+            },
+        }
     holdout_n = 0
     if isinstance(holdout_raw, dict):
         holdout_n = len(holdout_raw.get("cases") or [])
