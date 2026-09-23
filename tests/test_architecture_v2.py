@@ -60,13 +60,13 @@ def test_config_defaults_match_canonical_catalog():
     assert {"SNILS", "OMS", "INTERNATIONAL_PASSPORT"}.isdisjoint(cfg.default_pd_types)
 
 
-def test_context_ml_empty_result_is_authoritative():
+def test_context_ml_empty_result_falls_back_to_precise_rules():
     text = CLIENT_FIO_TEXT
     legacy = ContextFlow.detect(text, ml_findings=None)
-    strict_ml = ContextFlow.detect(text, ml_findings=[])
+    hybrid = ContextFlow.detect(text, ml_findings=[])
 
     assert any(f.type == "PERSON" for f in legacy.findings)
-    assert strict_ml.findings == []
+    assert any(f.type == "PERSON" for f in hybrid.findings)
 
 
 def test_raw_person_maps_to_cardholder_in_card_context():
