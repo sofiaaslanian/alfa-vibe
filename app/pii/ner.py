@@ -264,6 +264,16 @@ def merge_adjacent_person(findings: list[Finding], max_gap: int = 3) -> list[Fin
     return others + merged
 
 
+def _plain_entity(entity: dict[str, Any], offset: int = 0) -> dict[str, Any]:
+    """Pipeline output carries numpy scalars; /detect must return JSON-safe values."""
+    return {
+        "entity_group": entity["entity_group"],
+        "start": int(entity["start"]) + offset,
+        "end": int(entity["end"]) + offset,
+        "score": float(entity["score"]),
+    }
+
+
 class PiiNerModel:
     def __init__(self, model_name: str | None = None):
         from transformers import (
@@ -301,7 +311,7 @@ class PiiNerModel:
         if not text:
             return []
         if len(text) < MAX_LENGTH * 3:
-            return list(self._pipe(text))
+            return [_plain_entity(e) for e in self._pipe(text)]
         entities: list[dict[str, Any]] = []
         step = max(MAX_LENGTH - STRIDE, 1) * 2
         window = MAX_LENGTH * 3
@@ -309,14 +319,7 @@ class PiiNerModel:
         while start < len(text):
             chunk = text[start : start + window]
             for e in self._pipe(chunk):
-                entities.append(
-                    {
-                        "entity_group": e["entity_group"],
-                        "start": int(e["start"]) + start,
-                        "end": int(e["end"]) + start,
-                        "score": float(e["score"]),
-                    }
-                )
+                entities.append(_plain_entity(e, start))
             if start + window >= len(text):
                 break
             start += step

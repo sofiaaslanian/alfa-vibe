@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import os
+from fractions import Fraction
 
 import pytest
 
 from app.pii.detect import Finding
-from app.pii.ner import expand_span_to_word, map_entity, merge_adjacent_person
+from app.pii.ner import PiiNerModel, expand_span_to_word, map_entity, merge_adjacent_person
 
 
 def test_map_name_parts():
@@ -41,6 +43,24 @@ def test_map_phone_and_email():
     email = map_entity({"entity_group": "EMAIL", "start": 0, "end": 5, "score": 0.9})
     assert email is not None
     assert email.type == "EMAIL"
+
+
+def test_predict_returns_json_safe_entities():
+    # Fraction stands in for numpy scalars: int()/float() work, json.dumps does not.
+    model = PiiNerModel.__new__(PiiNerModel)
+    model._pipe = lambda _text: [
+        {
+            "entity_group": "FIRST_NAME",
+            "word": "Иван",
+            "start": Fraction(11),
+            "end": Fraction(15),
+            "score": Fraction(9, 10),
+        }
+    ]
+    entities = model.predict("Меня зовут Иван")
+    assert json.loads(json.dumps(entities)) == [
+        {"entity_group": "FIRST_NAME", "start": 11, "end": 15, "score": 0.9}
+    ]
 
 
 def test_map_ignores_geopolitical_country():
