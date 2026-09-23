@@ -5,6 +5,9 @@ from app.pii import rules
 from app.pii.structural import normalize_structures
 
 
+
+CVC_TEXT = "мой CVC код 532"
+
 def test_email_positive():
     text = "Клиент: ivanov@mail.ru написал письмо"
     f = rules.detect_email(text)
@@ -93,9 +96,9 @@ def test_textual_dates_and_negatives():
 def test_cvv_requires_anchor():
     assert rules.detect_cvv("код офиса: 123") == []
     assert len(rules.detect_cvv("CVV карты: 123")) == 1
-    assert len(rules.detect_cvv("мой CVC код 532")) == 1
-    assert rules.detect_cvv("мой CVC код 532")[0].start == (
-        "мой CVC код 532".index("532")
+    assert len(rules.detect_cvv(CVC_TEXT)) == 1
+    assert rules.detect_cvv(CVC_TEXT)[0].start == (
+        CVC_TEXT.index("532")
     )
     assert len(rules.detect_cvv("CVC: 532")) == 1
     assert rules.detect_cvv("заказ код 532") == []

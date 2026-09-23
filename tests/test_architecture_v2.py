@@ -5,6 +5,9 @@ from app.pii.detect import Finding
 from app.pii.flows import ContextFlow
 from app.pii.structural import normalize_structures
 
+CLIENT_FIO_TEXT = "ФИО клиента: Иванов Иван"
+ML_UNAVAILABLE = "ml unavailable"
+
 
 def test_canonical_catalog_is_exactly_17_types():
     assert len(BY_TYPE) == 17
@@ -58,7 +61,7 @@ def test_config_defaults_match_canonical_catalog():
 
 
 def test_context_ml_empty_result_is_authoritative():
-    text = "ФИО клиента: Иванов Иван"
+    text = CLIENT_FIO_TEXT
     legacy = ContextFlow.detect(text, ml_findings=None)
     strict_ml = ContextFlow.detect(text, ml_findings=[])
 
@@ -91,16 +94,16 @@ def test_context_ml_failure_is_fail_closed(monkeypatch):
         use_local = False
 
         def detect_raw(self, text):
-            raise RuntimeError("ml unavailable")
+            raise RuntimeError(ML_UNAVAILABLE)
 
     old = detect_mod._ner
     detect_mod._ner = BrokenNer()
     try:
         monkeypatch.setenv("CONTEXT_ML_FAIL_CLOSED", "1")
         try:
-            detect_mod.detect_pii("ФИО клиента: Иванов Иван", enable_ner=True)
+            detect_mod.detect_pii(CLIENT_FIO_TEXT, enable_ner=True)
         except RuntimeError as exc:
-            assert str(exc) == "ml unavailable"
+            assert str(exc) == ML_UNAVAILABLE
         else:
             raise AssertionError("required context ML failure must propagate")
     finally:
@@ -115,13 +118,13 @@ def test_explicit_fail_open_is_compatibility_mode_only(monkeypatch):
         use_local = False
 
         def detect_raw(self, text):
-            raise RuntimeError("ml unavailable")
+            raise RuntimeError(ML_UNAVAILABLE)
 
     old = detect_mod._ner
     detect_mod._ner = BrokenNer()
     try:
         findings = detect_mod.detect_pii(
-            "ФИО клиента: Иванов Иван",
+            CLIENT_FIO_TEXT,
             enable_ner=True,
             fail_closed_on_ner_error=False,
         )

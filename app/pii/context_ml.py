@@ -15,12 +15,30 @@ from app.pii.detect import Finding
 
 _NAME_LABELS = {"FIRST_NAME", "LAST_NAME", "MIDDLE_NAME", "PER", "PERSON"}
 _LOCATION_LABELS = {"COUNTRY", "REGION", "DISTRICT", "CITY", "LOC", "LOCATION"}
-_ADDRESS_LABELS = {"ADDRESS", "REGION", "DISTRICT", "CITY", "STREET", "HOUSE", "LOC", "LOCATION"}
+_ADDRESS_LABELS = {
+    "ADDRESS",
+    "REGION",
+    "DISTRICT",
+    "CITY",
+    "STREET",
+    "HOUSE",
+    "LOC",
+    "LOCATION",
+}
 _ORG_LABELS = {"ORG", "ORGANIZATION"}
+_NAME_PART = {
+    "FIRST_NAME": "first",
+    "LAST_NAME": "last",
+    "MIDDLE_NAME": "middle",
+}
+_ADDRESS_PART = {
+    "REGION": "region",
+    "DISTRICT": "district",
+    "CITY": "city",
+    "STREET": "street",
+    "HOUSE": "house",
+}
 
-# redmadrobot-rnd/rubert-base-pii-ner has name + address hierarchy labels,
-# but no ORG label. PASSPORT_ISSUER therefore stays an explicit migration
-# fallback until the context model is replaced/extended.
 ML_COVERED_CONTEXT_TYPES = frozenset({
     "PERSON",
     "PLACE_OF_BIRTH",
@@ -52,7 +70,13 @@ _ADDRESS_ROLE_RE = re.compile(
 
 
 def _label(entity: dict[str, Any]) -> str:
-    raw = entity.get("entity_group") or entity.get("entity") or entity.get("label") or entity.get("type") or ""
+    raw = (
+        entity.get("entity_group")
+        or entity.get("entity")
+        or entity.get("label")
+        or entity.get("type")
+        or ""
+    )
     value = str(raw).strip()
     if value.startswith(("B-", "I-", "S-", "E-")):
         value = value.split("-", 1)[1]
@@ -81,72 +105,119 @@ def _ctx(text: str, start: int, end: int, size: int = 100) -> str:
     return text[max(0, start - size): min(len(text), end + size)]
 
 
+def _append_unique(
+    out: list[Finding],
+    seen: set[tuple[str, int, int, str]],
+    typ: str,
+    start: int,
+    end: int,
+    score: float,
+    part: str = "",
+) -> None:
+    key = (typ, start, end, part)
+    if key in seen:
+        return
+    seen.add(key)
+    out.append(Finding(typ, start, end, score, "context_ml_v1", part=part))
+
+
+def _expand_name_span(text: str, label: str, start: int, end: int) -> tuple[int, int]:
+    if label not in _NAME_LABELS:
+        return start, end
+    from app.pii.ner import expand_span_to_word
+
+    return expand_span_to_word(text, start, end)
+
+
+def _add_name_roles(
+    out: list[Finding],
+    seen: set[tuple[str, int, int, str]],
+    label: str,
+    start: int,
+    end: int,
+    score: float,
+    ctx: str,
+) -> None:
+    if label not in _NAME_LABELS:
+        return
+    part = _NAME_PART.get(label, "")
+    _append_unique(out, seen, "PERSON", start, end, score, part)
+    if _CARDHOLDER_ROLE_RE.search(ctx):
+        _append_unique(out, seen, "CARDHOLDER_NAME", start, end, score, part)
+
+
+def _add_address_role(
+    out: list[Finding],
+    seen: set[tuple[str, int, int, str]],
+    label: str,
+    start: int,
+    end: int,
+    score: float,
+    ctx: str,
+) -> None:
+    if label not in _ADDRESS_LABELS:
+        return
+    is_specific_address = label in {"ADDRESS", "STREET", "HOUSE"}
+    if not is_specific_address and not _ADDRESS_ROLE_RE.search(ctx):
+        return
+    _append_unique(out, seen, "ADDRESS", start, end, score, _ADDRESS_PART.get(label, ""))
+
+
+def _add_location_roles(
+    out: list[Finding],
+    seen: set[tuple[str, int, int, str]],
+    label: str,
+    start: int,
+    end: int,
+    score: float,
+    ctx: str,
+) -> None:
+    if label in _LOCATION_LABELS and _BIRTH_ROLE_RE.search(ctx):
+        _append_unique(out, seen, "PLACE_OF_BIRTH", start, end, score)
+    if label in {"COUNTRY", "LOC", "LOCATION"} and _CITIZEN_ROLE_RE.search(ctx):
+        _append_unique(out, seen, "CITIZENSHIP", start, end, score)
+
+
+def _add_issuer_role(
+    out: list[Finding],
+    seen: set[tuple[str, int, int, str]],
+    label: str,
+    start: int,
+    end: int,
+    score: float,
+    ctx: str,
+) -> None:
+    if label in _ORG_LABELS and _ISSUER_ROLE_RE.search(ctx):
+        _append_unique(out, seen, "PASSPORT_ISSUER", start, end, score)
+
+
+def _convert_entity(
+    text: str,
+    entity: dict[str, Any],
+    out: list[Finding],
+    seen: set[tuple[str, int, int, str]],
+) -> None:
+    span = _span(entity)
+    if span is None:
+        return
+    label = _label(entity)
+    start, end = _expand_name_span(text, label, *span)
+    score = _score(entity)
+    ctx = _ctx(text, start, end)
+
+    _add_name_roles(out, seen, label, start, end, score, ctx)
+    _add_address_role(out, seen, label, start, end, score, ctx)
+    _add_location_roles(out, seen, label, start, end, score, ctx)
+    _add_issuer_role(out, seen, label, start, end, score, ctx)
+
+
 def raw_entities_to_context_findings(
     text: str,
     entities: list[dict[str, Any]],
 ) -> list[Finding]:
     """Convert raw NER entities into candidates for context-defined PII."""
-
     out: list[Finding] = []
     seen: set[tuple[str, int, int, str]] = set()
-
-    def add(typ: str, start: int, end: int, score: float, part: str = "") -> None:
-        key = (typ, start, end, part)
-        if key in seen:
-            return
-        seen.add(key)
-        out.append(Finding(typ, start, end, score, "context_ml_v1", part=part))
-
     for entity in entities:
-        label = _label(entity)
-        span = _span(entity)
-        if span is None:
-            continue
-        start, end = span
-        score = _score(entity)
-        if label in _NAME_LABELS:
-            from app.pii.ner import expand_span_to_word
-            start, end = expand_span_to_word(text, start, end)
-        ctx = _ctx(text, start, end)
-
-        # Generic PERSON candidate.
-        if label in _NAME_LABELS:
-            part = {
-                "FIRST_NAME": "first",
-                "LAST_NAME": "last",
-                "MIDDLE_NAME": "middle",
-            }.get(label, "")
-            add("PERSON", start, end, score, part)
-
-            # Same name may have the specific role "cardholder".
-            if _CARDHOLDER_ROLE_RE.search(ctx):
-                add("CARDHOLDER_NAME", start, end, score, part)
-
-        # Generic location/address components become ADDRESS only when the
-        # business context says "address". STREET/HOUSE are address-specific
-        # enough to be accepted directly; CITY/REGION/etc. are ambiguous.
-        if label in _ADDRESS_LABELS:
-            part = {
-                "REGION": "region",
-                "DISTRICT": "district",
-                "CITY": "city",
-                "STREET": "street",
-                "HOUSE": "house",
-            }.get(label, "")
-            if label in {"ADDRESS", "STREET", "HOUSE"} or _ADDRESS_ROLE_RE.search(ctx):
-                add("ADDRESS", start, end, score, part)
-
-        # Business role: place of birth.
-        if label in _LOCATION_LABELS and _BIRTH_ROLE_RE.search(ctx):
-            add("PLACE_OF_BIRTH", start, end, score)
-
-        # Business role: citizenship. COUNTRY is strongest; LOC/LOCATION are
-        # accepted only with an explicit citizenship cue.
-        if label in {"COUNTRY", "LOC", "LOCATION"} and _CITIZEN_ROLE_RE.search(ctx):
-            add("CITIZENSHIP", start, end, score)
-
-        # Business role: organisation that issued the passport.
-        if label in _ORG_LABELS and _ISSUER_ROLE_RE.search(ctx):
-            add("PASSPORT_ISSUER", start, end, score)
-
+        _convert_entity(text, entity, out, seen)
     return out

@@ -8,6 +8,8 @@ from app.pii.detect import detect_pii
 from app.pii.discourse import is_personal_person_mention, should_skip_person
 from tests.conftest import joined_mask_vals
 
+ALEXANDER = "Александр"
+
 
 def _persons(text: str) -> list[str]:
     return joined_mask_vals(text, "PERSON")
@@ -80,7 +82,7 @@ def test_ner_mid_sentence_banking(monkeypatch):
     assert "Дмитрий" in kept and "Орлов" in kept
     poet = [f for f in detect_pii(drop, enable_ner=True) if f.type == "PERSON"]
     assert poet and all(getattr(f, "decision", "") == "allow" for f in poet)
-    assert any("Пушкин" in drop[f.start : f.end] or "Александр" in drop[f.start : f.end] for f in poet)
+    assert any("Пушкин" in drop[f.start : f.end] or ALEXANDER in drop[f.start : f.end] for f in poet)
 
 
 def test_famous_name_allow_not_masked(monkeypatch):
@@ -137,7 +139,7 @@ def test_third_party_not_masked(text):
 def test_discourse_helpers():
     t = "Александр Пушкин — русский поэт"
     # No PERSON span from rules; helper on hypothetical offsets
-    s, e = t.index("Александр"), t.index("Александр") + len("Александр Пушкин")
+    s, e = t.index(ALEXANDER), t.index(ALEXANDER) + len("Александр Пушкин")
     assert is_personal_person_mention(t, s, e) is False
     assert should_skip_person(t, s, e) is True
 

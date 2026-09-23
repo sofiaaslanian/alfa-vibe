@@ -351,33 +351,41 @@ class NerClient:
         self._ensure_local()
         return list(self._local.predict(text))
 
+    @staticmethod
+    def _map_remote_entity(entity: dict) -> Finding | None:
+        if entity.get("type") == "PERSON" and "start" in entity:
+            return Finding(
+                "PERSON",
+                int(entity["start"]),
+                int(entity["end"]),
+                float(entity.get("score", 0)),
+                "ml",
+            )
+        return map_entity(entity)
+
+    def _detect_remote(self, text: str) -> list[Finding]:
+        raw = self.detect_raw(text)
+        findings = [
+            mapped
+            for entity in raw
+            if (mapped := self._map_remote_entity(entity)) is not None
+        ]
+        return self._finalize_person_spans(text, findings)
+
+    def _detect_local(self, text: str) -> list[Finding]:
+        self._ensure_local()
+        raw = self._local.predict(text)
+        findings = [mapped for entity in raw if (mapped := map_entity(entity))]
+        return self._finalize_person_spans(text, findings)
+
     def detect(self, text: str) -> list[Finding]:
         if not self.enabled:
             return []
         if self.base_url:
-            with httpx.Client(timeout=self.timeout) as client:
-                resp = client.post(f"{self.base_url}/detect", json={"text": text})
-                resp.raise_for_status()
-                data = resp.json()
-                raw = data.get("entities", data if isinstance(data, list) else [])
-            out: list[Finding] = []
-            for e in raw:
-                if e.get("type") == "PERSON" and "start" in e:
-                    out.append(
-                        Finding("PERSON", int(e["start"]), int(e["end"]), float(e.get("score", 0)), "ml")
-                    )
-                else:
-                    mapped = map_entity(e)
-                    if mapped:
-                        out.append(mapped)
-            return self._finalize_person_spans(text, out)
+            return self._detect_remote(text)
         if not self.use_local:
             return []
-        self._ensure_local()
-        raw = self._local.predict(text)
-        return self._finalize_person_spans(
-            text, [m for e in raw if (m := map_entity(e))]
-        )
+        return self._detect_local(text)
 
     @staticmethod
     def _finalize_person_spans(text: str, findings: list[Finding]) -> list[Finding]:

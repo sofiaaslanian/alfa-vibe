@@ -8,6 +8,18 @@ from app.pii import checksums
 from app.pii.claims import PERSON_SELF_CUE_FOR_RULES, PERSON_SELF_CUE_FRONT_FOR_RULES
 from app.pii.detect import Finding
 
+# Reused regex fragments are constants both for readability and to keep
+# static-analysis duplication rules from treating policy vocabulary as code
+# duplication.
+RX_NUMBER_ORDER = r"номер\s+заказ"
+RX_ARTICLE = r"артикул"
+RX_PUBLISHED = r"опубликован"
+RX_EXAMPLE = r"пример"
+RX_FORM = r"анкет"
+RX_FORMAT = r"формат"
+RX_PASSPORT = r"паспорт"
+RX_REFERENCE = r"справочник"
+
 
 def _window(text: str, start: int, end: int, size: int = 60) -> str:
     return text[max(0, start - size) : min(len(text), end + size)]
@@ -219,12 +231,12 @@ PHONE_NEG_ROLES = [
     r"телефон\s+отделен",
     r"телефон\s+банка",
     r"контакт[- ]?центр",
-    r"номер\s+заказ",
+    RX_NUMBER_ORDER,
     r"заказ[ае]?\s*№",
     r"заказ[аеу]?\s+\d",
     r"заказ[аеу]?\s*$",
     r"номер\s+заявк",
-    r"артикул",
+    RX_ARTICLE,
     r"идентификатор\s+транзак",
     r"tracking",
     r"трек[\-\s]?номер",
@@ -491,15 +503,15 @@ DATE_ROLE_LABELS = {
         r"подписан",
         r"заявк\w*\s*№",
         r"\bот\b",
-        r"опубликован",
+        RX_PUBLISHED,
         r"публикац",
         r"заседани",
         r"срок",
         r"встреч",
         r"действителен",
-        r"пример",
+        RX_EXAMPLE,
         r"заполнен",
-        r"анкет",
+        RX_FORM,
         r"дата\s+отч[её]т",
         r"отч[её]т",
         # Holidays / events — not personal birth dates
@@ -531,8 +543,8 @@ def _detect_role_dates(text: str, want_role: str, pii_type: str, detector: str) 
                 continue
             if want_role == "birth":
                 left = _left(text, m.start(), 100)
-                if _has_any(left, [r"пример", r"шаблон"]) and _has_any(
-                    left, [r"анкет", r"заполнен", r"формат"]
+                if _has_any(left, [RX_EXAMPLE, r"шаблон"]) and _has_any(
+                    left, [RX_FORM, r"заполнен", RX_FORMAT]
                 ):
                     continue
             span = _trim_value_span(text, m.start(), m.end())
@@ -567,15 +579,15 @@ PASSPORT_ANCHORED_RE = re.compile(
 PASSPORT_COMBINED_RE = re.compile(
     r"(?<!\d)(\d{2}\s\d{2}\s\d{6}|\d{4}\s?\d{6}|\d{10})(?!\d)"
 )
-PASSPORT_POS = [r"паспорт", r"пасп\."]
+PASSPORT_POS = [RX_PASSPORT, r"пасп\."]
 PASSPORT_NEG = [
-    r"номер\s+заказ",
+    RX_NUMBER_ORDER,
     r"заявк",
     r"номер\s+договор",
-    r"артикул",
+    RX_ARTICLE,
     r"накладн",
-    r"пример",
-    r"формат",
+    RX_EXAMPLE,
+    RX_FORMAT,
     r"инструкц",
     r"шаблон",
 ]
@@ -639,7 +651,7 @@ def detect_passport(text: str) -> list[Finding]:
 SUB_RE = re.compile(r"(?<!\d)\d{3}-\d{3}(?!\d)")
 SUB_LABELS = {
     "sub": [r"код\s+подраздел", r"подраздел"],
-    "other": [r"код\s+товар", r"артикул", r"заявк\w*\s*№", r"заказ", r"клиентск\w*\s+код"],
+    "other": [r"код\s+товар", RX_ARTICLE, r"заявк\w*\s*№", r"заказ", r"клиентск\w*\s+код"],
 }
 
 
@@ -660,7 +672,7 @@ VU_SPLIT_RE = re.compile(
 )
 VU_COMBINED_RE = re.compile(r"(?<!\d)(\d{10}|\d{2}\s\d{2}\s\d{6})(?!\d)")
 VU_POS = [r"водительск", r"\bву\b", r"в\s*/\s*у", r"удостоверен", r"права"]
-VU_NEG = [r"заявк", r"номер\s+заказ", r"накладн", r"паспорт", r"пример", r"формат"]
+VU_NEG = [r"заявк", RX_NUMBER_ORDER, r"накладн", RX_PASSPORT, RX_EXAMPLE, RX_FORMAT]
 
 
 def _detect_driver_license_candidate(text: str) -> list[Finding]:
@@ -909,8 +921,8 @@ CITIZEN_NEG = [
     r"получен\w*\s+гражданств",
     r"порядок\s+получен",
     r"условия\s+получен",
-    r"опубликован",
-    r"справочник",
+    RX_PUBLISHED,
+    RX_REFERENCE,
 ]
 
 
@@ -962,9 +974,9 @@ ISSUER_LABEL_RE = re.compile(
     re.IGNORECASE,
 )
 ISSUER_NEG = [
-    r"справочник",
+    RX_REFERENCE,
     r"новость",
-    r"опубликован",
+    RX_PUBLISHED,
     r"реестр\s+организац",
     r"список\s+организац",
     r"указано\s+в",
@@ -977,11 +989,11 @@ def detect_passport_issuer(text: str) -> list[Finding]:
         labeled = m.group(0)
         left = _left(text, m.start(), ROLE_WINDOW)
         if re.fullmatch(r"(?i)выдан\s*[:\-—–]?\s*", labeled):
-            if not _has_any(left, [r"паспорт", r"анкет", r"документ"]):
+            if not _has_any(left, [RX_PASSPORT, RX_FORM, r"документ"]):
                 continue
         if _has_any(left, ISSUER_NEG):
             continue
-        if _has_any(_right(text, m.end(), 80), [r"справочник", r"указано\s+в\s+справочник"]):
+        if _has_any(_right(text, m.end(), 80), [RX_REFERENCE, r"указано\s+в\s+справочник"]):
             continue
         pos = m.end()
         dm = DATE_NUM_RE.match(text, pos) or DATE_TEXT_RE.match(text, pos)

@@ -17,6 +17,7 @@ log = logging.getLogger("alfa.process")
 
 NS_AUTOTEST = "autotest"
 NS_PROXY = "proxy"
+OPERATION_EXPIRED = "operation expired"
 
 # ML context flow is needed when any context-defined type is enabled.
 CONTEXT_TYPES = {
@@ -124,6 +125,36 @@ class ProcessService:
     def _aad(self, namespace: str, payload_id: str) -> str:
         return f"{namespace}:{payload_id}"
 
+    def _result_for_live_state(
+        self,
+        payload: str,
+        payload_id: str,
+        live: OperationState,
+        *,
+        aad: str | None = None,
+    ) -> str:
+        fingerprint = hmac_hex(payload)
+        state_aad = aad or self._aad(live.namespace, payload_id)
+        if fingerprint == live.original_fp:
+            return decrypt(live.masked_enc, state_aad)
+        if fingerprint == live.masked_fp:
+            return decrypt(live.original_enc, state_aad)
+        raise ProcessError(409, "payload_id already bound to a different payload")
+
+    def _reload_race_winner(
+        self,
+        payload: str,
+        payload_id: str,
+        namespace: str,
+        aad: str,
+    ) -> str:
+        live = self.store.get_live(namespace, payload_id)
+        if live:
+            return self._result_for_live_state(payload, payload_id, live, aad=aad)
+        if self.store.get_seen(namespace, payload_id):
+            raise ProcessError(410, OPERATION_EXPIRED)
+        raise ProcessError(503, "state store race failed")
+
     def process(self, payload: str, payload_id: str, system: Optional[str] = None) -> str:
         if not payload_id:
             raise ProcessError(400, "payload_id must be non-empty")
@@ -131,15 +162,10 @@ class ProcessService:
         namespace = NS_AUTOTEST
         live = self.store.get_live(namespace, payload_id)
         if live:
-            fp = hmac_hex(payload)
-            if fp == live.original_fp:
-                return decrypt(live.masked_enc, self._aad(namespace, payload_id))
-            if fp == live.masked_fp:
-                return decrypt(live.original_enc, self._aad(namespace, payload_id))
-            raise ProcessError(409, "payload_id already bound to a different payload")
+            return self._result_for_live_state(payload, payload_id, live)
 
         if self.store.get_seen(namespace, payload_id):
-            raise ProcessError(410, "operation expired")
+            raise ProcessError(410, OPERATION_EXPIRED)
 
         findings = self.detect(payload, system)
         masked = apply_dev_redact(payload, findings)
@@ -156,18 +182,7 @@ class ProcessService:
         )
         created = self.store.create_atomic(state)
         if not created:
-            # lost race — reload winner
-            live = self.store.get_live(namespace, payload_id)
-            if not live:
-                if self.store.get_seen(namespace, payload_id):
-                    raise ProcessError(410, "operation expired")
-                raise ProcessError(503, "state store race failed")
-            fp = hmac_hex(payload)
-            if fp == live.original_fp:
-                return decrypt(live.masked_enc, aad)
-            if fp == live.masked_fp:
-                return decrypt(live.original_enc, aad)
-            raise ProcessError(409, "payload_id already bound to a different payload")
+            return self._reload_race_winner(payload, payload_id, namespace, aad)
 
         log.debug("mask payload_id=%s findings=%d", payload_id, len(findings))
         return masked
@@ -185,7 +200,7 @@ class ProcessService:
         if self.store.get_live(namespace, operation_id):
             raise ProcessError(409, "operation_id already exists")
         if self.store.get_seen(namespace, operation_id):
-            raise ProcessError(410, "operation expired")
+            raise ProcessError(410, OPERATION_EXPIRED)
 
         findings = self.detect(text, system)
         masked, mapping = apply_scoped_tokens(text, findings)
@@ -223,7 +238,7 @@ class ProcessService:
         live = self.store.get_live(namespace, operation_id)
         if not live:
             if self.store.get_seen(namespace, operation_id):
-                raise ProcessError(410, "operation expired")
+                raise ProcessError(410, OPERATION_EXPIRED)
             raise ProcessError(404, "operation not found")
         if live.system and live.system != system:
             raise ProcessError(403, "operation belongs to another system")
