@@ -6,7 +6,7 @@ systems:
     pd_types: []
     allow_demask: true
     mask_style: dev_redact
-    use_context_ml: true
+    use_context_ml: false
 
   demo:
     enabled: true
