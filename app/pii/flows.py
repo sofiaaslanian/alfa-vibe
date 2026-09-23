@@ -118,8 +118,11 @@ def run_detection_flows(
     *,
     context_ml_findings: list[Finding] | None = None,
 ) -> list[Finding]:
+    from app.pii.rules import detect_structured_fields
+
     findings: list[Finding] = []
     findings.extend(FormatFlow.detect(text).findings)
     findings.extend(FormatContextFlow.detect(text).findings)
     findings.extend(ContextFlow.detect(text, ml_findings=context_ml_findings).findings)
+    findings.extend(detect_structured_fields(text))
     return findings

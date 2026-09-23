@@ -848,7 +848,7 @@ PIN_LABELED_RE = re.compile(
     r"(?:\s+банковской)?(?:\s+карты)?"
     r"\s*[:\-—–]?\s*(\d{4,6})(?!\d)"
 )
-PIN_JSON_RE = re.compile(r'(?i)"\s*pin\s*"\s*:\s*"?(\d{4,6})"?' )
+PIN_JSON_RE = re.compile(r'(?i)"\s*(?:card_?pin|pin)\s*"\s*:\s*"?(\d{4,6})"?' )
 
 
 def detect_cvv(text: str) -> list[Finding]:
@@ -973,6 +973,7 @@ PLACE_LABEL_RE = re.compile(
     r"|рожден[ао]?"
     r"|place\s+of\s+birth"
     r"|birth\s*place"
+    r"|place_of_birth"
     r")"
     r"(?:\s+в)?"
     r"\s*[:\-—–]?\s*",
@@ -1086,8 +1087,11 @@ ISSUER_LABEL_RE = re.compile(
     r"(?:"
     r"кем\s+выдан\s+паспорт"
     r"|паспорт\s+выдан"
+    r"|паспорт\s*,\s*выданн\w*\s+орган\w*"
+    r"|выданн\w*\s+орган\w*"
     r"|орган(?:ом)?\s+(?:выдач\w*|выдавш\w*)(?:\s+паспорт\w*)?"
     r"|выдавш\w*\s+орган"
+    r"|passport\s+issued\s+by"
     r"|;\s*выдан"
     r"|выдан"
     r")"
@@ -1593,6 +1597,63 @@ def detect_person_patronymic(text: str) -> list[Finding]:
     from app.pii.structural import normalize_structures
 
     return normalize_structures(text, _detect_person_patronymic_candidate(text))
+
+
+# ── Structured field labels (JSON/YAML) ─────────────────────────────────────
+# Recognizes `"field": value` / `field: value` and maps the field name to the
+# canonical PII type. Recall-first: a structured field is explicit PII.
+_STRUCT_FIELD_RE = re.compile(
+    r'(?i)(?P<key>'
+    r'place_of_birth|birth_place|citizenship|passport_issuer|issuer|'
+    r'passport|passport_number|division_code|subdivision_code|'
+    r'passport_issue_date|issue_date|driver_license|card_pin|pin|'
+    r'cardholder|cardholder_name|address|birth_date|date_of_birth'
+    r')\s*["\']?\s*:\s*["\']?(?P<val>[^"\'\n,;]+)'
+)
+
+_STRUCT_FIELD_TYPE = {
+    "place_of_birth": "PLACE_OF_BIRTH",
+    "birth_place": "PLACE_OF_BIRTH",
+    "citizenship": "CITIZENSHIP",
+    "passport_issuer": "PASSPORT_ISSUER",
+    "issuer": "PASSPORT_ISSUER",
+    "passport": "PASSPORT",
+    "passport_number": "PASSPORT",
+    "division_code": "SUBDIVISION_CODE",
+    "subdivision_code": "SUBDIVISION_CODE",
+    "passport_issue_date": "PASSPORT_ISSUE_DATE",
+    "issue_date": "PASSPORT_ISSUE_DATE",
+    "driver_license": "DRIVER_LICENSE",
+    "card_pin": "PIN",
+    "pin": "PIN",
+    "cardholder": "CARDHOLDER_NAME",
+    "cardholder_name": "CARDHOLDER_NAME",
+    "address": "ADDRESS",
+    "birth_date": "BIRTH_DATE",
+    "date_of_birth": "BIRTH_DATE",
+}
+
+
+def detect_structured_fields(text: str) -> list[Finding]:
+    """Emit findings for explicit JSON/YAML field labels."""
+    out: list[Finding] = []
+    seen: set[tuple[str, int, int]] = set()
+    for m in _STRUCT_FIELD_RE.finditer(text):
+        key = m.group("key").lower()
+        typ = _STRUCT_FIELD_TYPE.get(key)
+        if typ is None:
+            continue
+        val = m.group("val").strip()
+        if not val:
+            continue
+        start = m.start("val")
+        end = start + len(val)
+        span = (typ, start, end)
+        if span in seen:
+            continue
+        seen.add(span)
+        out.append(Finding(typ, start, end, 0.97, "structured_field_v1"))
+    return out
 
 
 RULE_DETECTORS = [
