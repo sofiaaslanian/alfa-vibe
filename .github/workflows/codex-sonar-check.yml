@@ -41,9 +41,12 @@ jobs:
                   body = response.read()
                   return json.loads(body) if body else {}
 
-          password = secrets.token_urlsafe(32)
+          password = "Sc9!" + secrets.token_urlsafe(32)
           print("::add-mask::" + password)
-          api("/api/users/change_password", {"login": "admin", "previousPassword": "admin", "password": password})
+          try:
+              api("/api/users/change_password", {"login": "admin", "previousPassword": "admin", "password": password})
+          except error.HTTPError as exc:
+              raise RuntimeError("SonarQube password setup: " + exc.read().decode()) from exc
           token = api("/api/user_tokens/generate", {"name": "candidate-scan"}, "admin:" + password)["token"]
           print("::add-mask::" + token)
           api("/api/projects/create", {"project": "alfa-candidate", "name": "Alfa candidate"}, token + ":")
