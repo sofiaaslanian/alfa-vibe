@@ -82,6 +82,13 @@ def _split_cardholder(text: str, finding: Finding) -> list[Finding]:
 
 def _normalize_composite(text: str, finding: Finding) -> list[Finding]:
     if getattr(finding, "part", ""):
+        # An ML entity label (CITY/STREET/HOUSE) describes semantic role, but
+        # its raw span may still include syntax such as «ул.» or «д.».
+        # Canonicalize ML address spans through the same structural parser as
+        # rule candidates before masking. Structurally-produced findings from
+        # rules are already canonical and stay untouched.
+        if finding.type == "ADDRESS" and finding.detector == "context_ml_v1":
+            return _split_address(text, finding)
         return [finding]
 
     splitters = {
