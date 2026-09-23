@@ -17,23 +17,40 @@ _FIO_TOKEN_RE = re.compile(r"[А-ЯЁA-Z][А-Яа-яЁёA-Za-z\-]*")
 _LAT_TOKEN_RE = re.compile(r"[A-Z][A-Za-z\-]*")
 
 # Address component extractors (inside an already-validated ADDRESS span).
+# These regexes locate complete components; semantic span normalization below
+# removes role labels such as "ул.", "д.", "кв." from the protected value.
 _ADDR_INDEX_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
 _ADDR_CITY_RE = re.compile(
     r"(?i)(?:(?:г\.|город)\s*)?([А-ЯЁ][А-Яа-яЁё\-]+)"
 )
-_ADDR_STREET_RE = re.compile(
-    r"(?i)("
-    r"(?:ул\.|улица|пр\.|пр\-т|проспект|пер\.|переулок|ш\.|шоссе|б\-р|бульвар|наб\.|пл\.|площадь)"
-    r"\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
-    r"|"
-    r"[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+"
-    r"(?:ул\.|улица|пр\.|пр\-т|проспект|пер\.|переулок|ш\.|шоссе|б\-р|бульвар|наб\.|пл\.|площадь)"
-    r")"
+_ADDR_STREET_TYPE = (
+    r"(?:ул\.|улиц(?:а|е|у)|пр\.|пр\-т|проспект(?:е|у)?|просп\.|"
+    r"пер\.|переулок(?:е)?|ш\.|шоссе|б\-р|бульвар(?:е)?|"
+    r"наб\.|набережн(?:ая|ой)|пл\.|площад(?:ь|и))"
 )
-# Include role prefixes in house/flat spans so redact matches full-address baselines.
+_ADDR_STREET_RE = re.compile(
+    rf"(?i)("
+    rf"{_ADDR_STREET_TYPE}\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
+    rf"|"
+    rf"[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+{_ADDR_STREET_TYPE}"
+    rf")"
+)
 _ADDR_HOUSE_RE = re.compile(r"(?i)((?:д\.|дом)\s*\d+[А-ЯA-Z]?)")
 _ADDR_FLAT_RE = re.compile(r"(?i)((?:кв\.|квартира)\s*\d+)")
 _ADDR_CORP_RE = re.compile(r"(?i)((?:корп\.|корпус|стр\.|строен\w*)\s*\d+[А-ЯA-Z]?)")
+
+_ADDRESS_PREFIX_BY_PART = {
+    "street": re.compile(rf"(?i)^{_ADDR_STREET_TYPE}\s+"),
+    "house": re.compile(r"(?i)^(?:д\.|дом)\s*"),
+    "flat": re.compile(r"(?i)^(?:кв\.|квартира)\s*"),
+    "building": re.compile(r"(?i)^(?:корп\.|корпус|стр\.|строен\w*)\s*"),
+}
+_ADDRESS_SERVICE_RESIDUAL_RE = re.compile(
+    r"(?i)(?:^|\W)(?:на|г|город|ул|улица|улице|улицу|пр|пр-т|просп|"
+    r"проспект|проспекте|проспекту|пер|переулок|переулке|ш|шоссе|"
+    r"б-р|бульвар|бульваре|наб|набережная|набережной|пл|площадь|площади|"
+    r"д|дом|кв|квартира|корп|корпус|стр|строение)(?:\.|\W|$)"
+)
 
 
 def classify_fio_parts(tokens: list[str]) -> list[str]:
@@ -180,12 +197,18 @@ def _collect_address_parts(
     )
     for regex, part in patterns:
         for match in regex.finditer(chunk):
+            rel_start, rel_end = match.start(1), match.end(1)
+            prefix_re = _ADDRESS_PREFIX_BY_PART.get(part)
+            if prefix_re is not None:
+                prefix = prefix_re.match(chunk[rel_start:rel_end])
+                if prefix:
+                    rel_start += prefix.end()
             _append_address_part(
                 found,
                 covered,
                 start=start,
-                rel_start=match.start(1),
-                rel_end=match.end(1),
+                rel_start=rel_start,
+                rel_end=rel_end,
                 part=part,
                 score=score,
                 detector=detector,
@@ -218,13 +241,18 @@ def _address_parts_cover_alnum(
     end: int,
     findings: list[Finding],
 ) -> bool:
+    """All semantic values must be covered; address role words may remain open."""
     covered = {
         index
         for finding in findings
         for index in range(finding.start, finding.end)
-        if text[index].isalnum()
     }
-    return all(not text[index].isalnum() or index in covered for index in range(start, end))
+    residual = "".join(
+        " " if index in covered else text[index]
+        for index in range(start, end)
+    )
+    residual = _ADDRESS_SERVICE_RESIDUAL_RE.sub(" ", residual)
+    return not any(char.isalnum() for char in residual)
 
 
 def split_address_span(
