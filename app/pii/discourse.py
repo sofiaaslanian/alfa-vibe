@@ -297,17 +297,15 @@ def should_skip_phone(text: str, start: int, end: int) -> bool:
 
 def is_personal_email_mention(text: str, start: int, end: int) -> bool:
     """A syntactically valid email is PII unless its local role is non-personal."""
-    non_personal = re.compile(
-        rf"(?:{NON_PERSONAL_TEMPLATE_RE.pattern}|{PUBLIC_CONTACT_ROLE_RE.pattern})",
-        re.IGNORECASE,
+    left = _left(text, start)
+    personal_end = _last_match_end(EMAIL_PERSONAL_RE, left)
+    public_end = max(
+        _last_match_end(NON_PERSONAL_TEMPLATE_RE, left),
+        _last_match_end(PUBLIC_CONTACT_ROLE_RE, left),
     )
-    role = _left_role_decision(
-        text,
-        start,
-        personal_re=EMAIL_PERSONAL_RE,
-        public_re=non_personal,
-    )
-    return role is not False
+    if personal_end < 0 and public_end < 0:
+        return True
+    return personal_end >= public_end
 
 
 def should_skip_email(text: str, start: int, end: int) -> bool:
