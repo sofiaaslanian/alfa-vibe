@@ -109,7 +109,9 @@ ALLOW_REASON = {
     "PERSON": "нет личного claim — знаменитость / третье лицо",
     "ADDRESS": "служебный / публичный адрес",
     "INN": "не клиентский ИНН",
+    "EMAIL": "шаблонный / публичный email",
     "PHONE": "публичный / служебный номер",
+    "PAYMENT_CARD": "технический идентификатор, не платёжная карта",
     "BIRTH_DATE": "не дата рождения клиента",
     "PLACE_OF_BIRTH": "биография / не клиент",
 }
@@ -248,7 +250,9 @@ def filter_findings(text: str, findings: list[Finding]) -> list[Finding]:
     from app.pii.discourse import (
         should_skip_address,
         should_skip_birth_date,
+        should_skip_email,
         should_skip_inn,
+        should_skip_payment_card,
         should_skip_person,
         should_skip_phone,
         should_skip_place_of_birth,
@@ -260,7 +264,9 @@ def filter_findings(text: str, findings: list[Finding]) -> list[Finding]:
 
     skip_functions = {
         "INN": should_skip_inn,
+        "EMAIL": should_skip_email,
         "PHONE": should_skip_phone,
+        "PAYMENT_CARD": should_skip_payment_card,
         "BIRTH_DATE": should_skip_birth_date,
         "PLACE_OF_BIRTH": should_skip_place_of_birth,
     }
