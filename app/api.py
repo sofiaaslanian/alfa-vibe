@@ -408,7 +408,7 @@ async def demo_config(request: Request):
         "default_pd_types": cfg.default_pd_types,
         "storage": os.getenv("STORAGE_BACKEND", "memory"),
         "ner_enabled": os.getenv("NER_ENABLED", "0") == "1",
-        "proxy_key_required": bool(os.getenv("PROXY_API_KEYS", "").strip()),
+        "proxy_key_required": True,
     }
 
 
