@@ -8,12 +8,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     NER_LOCAL=1 \
     HF_HOME=/opt/hf-cache
 
-COPY requirements-ner.lock .
-RUN pip install --no-cache-dir --require-hashes -r requirements-ner.lock
-
 RUN useradd --system --no-create-home --uid 10001 app \
     && mkdir -p /opt/hf-cache \
     && chown app /opt/hf-cache
+
+COPY requirements-ner.lock .
+RUN pip install --no-cache-dir --require-hashes -r requirements-ner.lock
 
 COPY app ./app
 USER app
