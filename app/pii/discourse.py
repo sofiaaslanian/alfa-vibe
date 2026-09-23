@@ -318,11 +318,32 @@ def is_personal_place_of_birth_mention(text: str, start: int, end: int) -> bool:
             left,
         )
     )
+    # Celebrity biography: «<Имя> <Фамилия> родился в <место>» — third party,
+    # not the client's birth place.
+    biography = bool(
+        re.search(
+            r"(?i)(?<![А-ЯЁA-Z])[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+\s+родил(?:ся|ась)\s+в\s+",
+            left,
+        )
+    )
 
     # Celebrity / biography narrative without KYC → not client PII.
     # Every other PLACE_OF_BIRTH finding is kept by policy.
-    return not (third and not self_claim and not client_near)
+    return not ((third or biography) and not self_claim and not client_near)
 
 
 def should_skip_place_of_birth(text: str, start: int, end: int) -> bool:
     return not is_personal_place_of_birth_mention(text, start, end)
+
+
+def should_skip_citizenship(text: str, start: int, end: int) -> bool:
+    """Drop citizenship findings in informational/regulatory context
+    («Правила получения гражданства…», «…опубликованы»), not client PII."""
+    from app.pii.rules import CITIZEN_NEG
+
+    left = _left(text, start, 120)
+    ctx = _ctx(text, start, end)
+    return bool(
+        re.search(r"(?i)получен\w*\s+гражданств|правил\w*.{0,40}гражданств", left)
+        or any(re.search(p, left + ctx, re.I) for p in CITIZEN_NEG)
+    )

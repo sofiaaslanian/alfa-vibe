@@ -270,6 +270,7 @@ def filter_findings(text: str, findings: list[Finding]) -> list[Finding]:
     from app.pii.discourse import (
         should_skip_address,
         should_skip_birth_date,
+        should_skip_citizenship,
         should_skip_inn,
         should_skip_person,
         should_skip_phone,
@@ -285,6 +286,7 @@ def filter_findings(text: str, findings: list[Finding]) -> list[Finding]:
         "PHONE": should_skip_phone,
         "BIRTH_DATE": should_skip_birth_date,
         "PLACE_OF_BIRTH": should_skip_place_of_birth,
+        "CITIZENSHIP": should_skip_citizenship,
     }
     return [
         decided.get(id(finding), _apply_single_skip(text, finding, skip_functions))

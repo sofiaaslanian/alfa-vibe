@@ -260,6 +260,8 @@ PHONE_NEG_ROLES = [
     r"заказ[аеу]?\s*$",
     r"номер\s+заявк",
     RX_ARTICLE,
+    RX_EXAMPLE,
+    r"код\s+операц",
     r"идентификатор\s+транзак",
     r"tracking",
     r"трек[\-\s]?номер",
@@ -666,6 +668,8 @@ PASSPORT_NEG = [
     r"шаблон",
     # Driver-license context: «серия … номер …» belongs to the ВУ, not a passport.
     r"водительск",
+    r"\bву\b",
+    r"права",
 ]
 
 
@@ -699,8 +703,14 @@ def _passport_anchored_candidates(
     out: list[Finding] = []
     for match in PASSPORT_ANCHORED_RE.finditer(text):
         left = _left(text, match.start(), 55)
+        ctx = _window(text, match.start(), match.end())
         digits = _digits_only(match.group(1) + match.group(2))
-        if _overlaps_covered(match, covered) or _has_any(left, PASSPORT_NEG) or len(digits) != 10:
+        if (
+            _overlaps_covered(match, covered)
+            or _has_any(left, PASSPORT_NEG)
+            or _has_any(ctx, PASSPORT_NEG)
+            or len(digits) != 10
+        ):
             continue
         out.append(Finding("PASSPORT", match.start(1), match.end(2), 0.96, "passport_anchored_v1"))
         covered.add((match.start(), match.end()))
@@ -763,7 +773,8 @@ def detect_subdivision(text: str) -> list[Finding]:
 
 # --- driver license ---
 VU_SPLIT_RE = re.compile(
-    r"серия\s+(\d{2}\s\d{2})\s*,?\s*номер\s+(\d{6})",
+    r"(?:\bву\b|права|водительск\w*\s+удостоверен\w*)?\s*"
+    r"серия\s+(?:\bву\b\s*)?(\d{2}\s\d{2})\s*,?\s*номер\s+(\d{6})",
     re.IGNORECASE,
 )
 VU_COMBINED_RE = re.compile(r"(?<!\d)(\d{10}|\d{2}\s\d{2}\s\d{6})(?!\d)")
@@ -1062,7 +1073,7 @@ ISSUER_LABEL_RE = re.compile(
     r"(?:"
     r"кем\s+выдан\s+паспорт"
     r"|паспорт\s+выдан"
-    r"|орган(?:ом)?\s+выдач\w*(?:\s+паспорт\w*)?"
+    r"|орган(?:ом)?\s+(?:выдач\w*|выдавш\w*)(?:\s+паспорт\w*)?"
     r"|выдавш\w*\s+орган"
     r"|;\s*выдан"
     r"|выдан"
@@ -1163,12 +1174,18 @@ def _detect_cardholder_name_candidate(text: str) -> list[Finding]:
         if _has_any(left + label, CARDHOLDER_NEG):
             continue
         # "имя держателя" is a valid abbreviated field label only when the
-        # nearby context establishes that the holder is a card holder.
+        # nearby context establishes that the holder is a card holder, or the
+        # bare label is followed directly by a name (not a non-card holder type
+        # such as акция / полис / облигация / доля / пай).
         if not re.search(r"(?i)карт|card", label) and not _has_any(
             _window(text, m.start(), m.end(), 80),
             [r"карт", r"card"],
         ):
-            continue
+            if re.search(
+                r"(?i)акци|полис|облигац|дол[ия]|па[её]|сертификат|вклад|сч[её]т",
+                text[m.end() : m.end() + 40],
+            ):
+                continue
         rest = text[m.end() :]
         vm = CARDHOLDER_VALUE_RE.match(rest)
         if not vm:
