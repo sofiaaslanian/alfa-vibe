@@ -31,7 +31,9 @@ class SystemConfig:
     mask_style: str = "default"  # default | token | synthetic
     # type → list of co-required types (bonus: PIN alone off, PIN+CARD on)
     combo_require: dict[str, list[str]] = field(default_factory=dict)
-    # None = follow NER_ENABLED; True/False = force for this system
+    # None = follow CONTEXT_ML_ENABLED; True/False = force for this system.
+    # use_ner is kept as a compatibility alias for old config files.
+    use_context_ml: bool | None = None
     use_ner: bool | None = None
 
 
@@ -57,9 +59,9 @@ def _rule_from_dict(data: dict[str, Any]) -> PDRule:
 
 
 def _system_from_dict(name: str, data: dict[str, Any]) -> SystemConfig:
-    use_ner = data.get("use_ner", None)
-    if use_ner is not None:
-        use_ner = bool(use_ner)
+    use_context_ml = data.get("use_context_ml", data.get("use_ner", None))
+    if use_context_ml is not None:
+        use_context_ml = bool(use_context_ml)
     return SystemConfig(
         name=name,
         enabled=data.get("enabled", True),
@@ -67,7 +69,8 @@ def _system_from_dict(name: str, data: dict[str, Any]) -> SystemConfig:
         allow_demask=data.get("allow_demask", True),
         mask_style=data.get("mask_style", "default"),
         combo_require=dict(data.get("combo_require") or {}),
-        use_ner=use_ner,
+        use_context_ml=use_context_ml,
+        use_ner=use_context_ml,
     )
 
 
