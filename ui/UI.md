@@ -69,7 +69,7 @@
   <active>.sidenav__link--active — red pill #ef3124, white text, white icon (filter invert)</active>
   <inactive>gray text rgba(11,31,53,0.6), icon opacity 0.55</inactive>
   <hover>inactive only — bg #f2f3f5, no animation</hover>
-  <badge>.sidenav__badge — blue #4451f5 count pill on link; on active → white/25% bg</badge>
+  <badge>.sidenav__badge — blue #4451f5 count pill on link; on active → white bg, dark-red text</badge>
   <motion>transition: none on links — instant color/bg swap, no sliding indicator</motion>
   <forbidden-in-sidenav>dark promo cards at bottom · sliding pill animation · delayed active state · emoji/icon-chip placeholders</forbidden-in-sidenav>
 </sidenav>

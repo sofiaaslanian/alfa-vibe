@@ -331,7 +331,7 @@
   font-size: 14px;
   line-height: 1.55;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   color: var(--alfa-text);
 }
 
@@ -352,7 +352,7 @@
   border-bottom-color: #7b5cff;
 }
 .pd-span--allow.is-focus {
-  background: #7b5cff;
+  background: #6c4dff;
   color: #fff;
 }
 .pd-token {
@@ -430,7 +430,7 @@
   font-weight: 600;
   font-size: 13px;
   margin-bottom: 4px;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .pd-find__meta {
   font-size: 11px;

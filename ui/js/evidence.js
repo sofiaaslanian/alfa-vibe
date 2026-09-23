@@ -78,4 +78,4 @@ async function loadEvidence() {
   renderCriteria(evidence.criteria);
 }
 
-loadEvidence();
+await loadEvidence();

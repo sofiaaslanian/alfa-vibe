@@ -928,8 +928,8 @@ a:hover { color: var(--alfa-red); }
 }
 
 .sidenav a.sidenav__link--active .sidenav__badge {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
+  background: #ffffff;
+  color: #d91d0b;
 }
 
 .sidenav__link-text {
@@ -1351,8 +1351,8 @@ a:hover { color: var(--alfa-red); }
   height: 32px;
   border: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: #ffffff;
+  color: #4451f5;
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
@@ -1409,8 +1409,8 @@ a:hover { color: var(--alfa-red); }
 }
 
 .dash-metric--hero .dash-delta--up {
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+  background: #ffffff;
+  color: #4451f5;
 }
 
 .dash-grid {
