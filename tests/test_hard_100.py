@@ -462,8 +462,8 @@ CASES = [
     {
         "id": "h63_json_customer_vs_merchant",
         "text": (
-            '{"customer":{"name":IVAN_PETROV,"email":IVAN_EMAIL},'
-            '"merchant":{"name":IVAN_PETROV,"email":"shop@example.ru"}}'
+            f'{{"customer":{{"name":"{IVAN_PETROV}","email":"{IVAN_EMAIL}"}},'
+            f'"merchant":{{"name":"{IVAN_PETROV}","email":"shop@example.ru"}}}}'
         ),
         "enabled_types": ["PERSON_NAME", "EMAIL"],
         "expected": [
