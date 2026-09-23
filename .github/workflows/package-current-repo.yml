@@ -1,0 +1,30 @@
+name: Package current repository
+
+on:
+  push:
+    branches:
+      - experiment/functional-hypotheses-final
+    paths:
+      - .github/workflows/package-current-repo.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: experiment/functional-hypotheses-final
+          persist-credentials: false
+      - name: Build clean repository zip
+        run: |
+          rm -f .github/workflows/package-current-repo.yml
+          zip -qr /tmp/alfa-vibe-functional-final.zip . -x '.git/*' '__pycache__/*' '*.pyc'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alfa-vibe-functional-final
+          path: /tmp/alfa-vibe-functional-final.zip
+          if-no-files-found: error
