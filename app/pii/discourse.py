@@ -54,6 +54,20 @@ CONTACT_BEFORE_RE = re.compile(
     r"\s*[:\-]?\s+$"
 )
 
+CONTACT_AFTER_RE = re.compile(
+    r"(?i)^\s*[,;:—–-]?\s*"
+    r"(?:тел(?:ефон)?\.?|мобильн\w*|email|e-?mail|почт[аы]?|мейл)"
+    r"\s*[:.]?"
+)
+_PATRONYMIC_TOKEN_RE = re.compile(
+    r"(?i)(?:ич(?:а|у|ем|е)?|вн(?:а|ы|е|у|ой)|ичн(?:а|ы|е|у|ой))$"
+)
+
+
+def _looks_like_full_patronymic_fio(value: str) -> bool:
+    tokens = value.split()
+    return len(tokens) == 3 and any(_PATRONYMIC_TOKEN_RE.search(token) for token in tokens)
+
 
 def _left(text: str, start: int, size: int = WINDOW) -> str:
     return text[max(0, start - size) : start]
@@ -110,6 +124,8 @@ def is_personal_person_mention(text: str, start: int, end: int) -> bool:
         return True
     if third:
         return False
+    if _looks_like_full_patronymic_fio(text[start:end]) and CONTACT_AFTER_RE.search(right):
+        return True
     return contact or banking_strong or client or claim
 
 
