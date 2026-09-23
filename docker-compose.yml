@@ -20,6 +20,31 @@ services:
       timeout: 3s
       retries: 10
 
+  ner:
+    build:
+      context: .
+      dockerfile: Dockerfile.ner
+    environment:
+      NER_ENABLED: "1"
+      NER_LOCAL: "1"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    expose:
+      - "8090"
+    restart: unless-stopped
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   proxy:
     build: .
     env_file:
@@ -27,9 +52,11 @@ services:
     environment:
       STORAGE_BACKEND: redis
       REDIS_URL: redis://redis:6379/0
-      # Public AlfaSonar path: keep NER off; the slim image has no torch.
-      NER_ENABLED: "${NER_ENABLED:-0}"
-      NER_LOCAL: "1"
+      # Context ML runs in the dedicated NER service; proxy stays slim.
+      CONTEXT_ML_ENABLED: "${CONTEXT_ML_ENABLED:-0}"
+      NER_ENABLED: "${CONTEXT_ML_ENABLED:-0}"
+      NER_URL: "http://ner:8090"
+      NER_LOCAL: "0"
       NER_FAIL_CLOSED: "0"
       PROXY_API_KEYS: "${PROXY_API_KEYS:-demo-key}"
       PROCESS_CONCURRENCY: "${PROCESS_CONCURRENCY:-180}"
@@ -39,6 +66,8 @@ services:
       - "8080"
     depends_on:
       redis:
+        condition: service_healthy
+      ner:
         condition: service_healthy
     restart: unless-stopped
     networks:
