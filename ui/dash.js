@@ -13,7 +13,10 @@ const Dash = {
     if (raw <= 0) return 10;
     const exp = 10 ** Math.floor(Math.log10(raw));
     const n = raw / exp;
-    const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+    let step = 10;
+    if (n <= 1) step = 1;
+    else if (n <= 2) step = 2;
+    else if (n <= 5) step = 5;
     return step * exp;
   },
 
@@ -160,7 +163,10 @@ const Dash = {
       const top = s.values.map((v, i) => `${coords.xAt(i).toFixed(1)},${coords.yAt(v).toFixed(1)}`).join(' L ');
       const area = `M ${coords.xAt(0).toFixed(1)},${baseline} L ${top} L ${coords.xAt(labels.length - 1).toFixed(1)},${baseline} Z`;
       plotSvg += `<path d="${area}" fill="${s.color}" fill-opacity="0.18"/>`;
-      plotSvg += `<polyline points="${s.values.map((v, i) => `${coords.xAt(i).toFixed(1)},${coords.yAt(v).toFixed(1)}`).join(' ')}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+      const points = s.values
+        .map((v, i) => `${coords.xAt(i).toFixed(1)},${coords.yAt(v).toFixed(1)}`)
+        .join(' ');
+      plotSvg += `<polyline points="${points}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
     });
 
     this.mountChart(container, { labels, yMax: coords.max, plotSvg });

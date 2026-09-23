@@ -17,9 +17,18 @@ log = logging.getLogger("alfa.process")
 
 NS_AUTOTEST = "autotest"
 NS_PROXY = "proxy"
+OPERATION_EXPIRED = "operation expired"
 
-# NER is expensive — only when PERSON is in the enabled type set.
-PERSON_TYPES = {"PERSON", "PERSON_NAME"}
+# ML context flow is needed when any context-defined type is enabled.
+CONTEXT_TYPES = {
+    "PERSON",
+    "PERSON_NAME",
+    "PLACE_OF_BIRTH",
+    "CITIZENSHIP",
+    "PASSPORT_ISSUER",
+    "ADDRESS",
+    "CARDHOLDER_NAME",
+}
 
 
 class ProcessError(Exception):
@@ -70,30 +79,39 @@ class ProcessService:
                 out.append(f)
         return out
 
-    def _ner_for_system(self, system: Optional[str], need_person: bool) -> bool:
-        """RuBERT only when explicitly enabled for the system (demo).
+    def _context_ml_for_system(self, system: Optional[str], need_context_ml: bool) -> bool:
+        """Enable ML only when a context-defined PII type is actually needed.
 
-        No X-System (AlfaSonar /process) → always rules-only for RPS.
+        Routing is separate from detection logic: a system may deliberately
+        keep ML off for a compatibility/high-RPS profile.
         """
-        if not need_person:
+        if not need_context_ml:
             return False
-        if os.getenv("NER_ENABLED", "0") != "1":
+        master = os.getenv("CONTEXT_ML_ENABLED", os.getenv("NER_ENABLED", "0"))
+        if master != "1":
             return False
-        if not system:
-            return False
-        if system in self.config.systems:
-            flag = self.config.systems[system].use_ner
+
+        # Public /process has no X-System header. Treat it as the explicit
+        # autotest profile instead of silently disabling the context ML flow.
+        effective_system = system or "autotest"
+        if effective_system in self.config.systems:
+            flag = self.config.systems[effective_system].use_context_ml
             if flag is not None:
                 return flag
-        if system in {"autotest", "high_rps", "format_only"}:
+        if effective_system in {"high_rps", "format_only"}:
             return False
-        return system == "demo"
+        return effective_system in {"autotest", "demo"}
+
+    def _ner_for_system(self, system: Optional[str], need_person: bool) -> bool:
+        """Backward-compatible alias for the pre-v2 routing API."""
+        return self._context_ml_for_system(system, need_person)
+
 
     def detect(self, text: str, system: Optional[str] = None) -> list[Finding]:
         allowed_set = self._allowed_types(system)
-        need_person = allowed_set is None or bool(allowed_set & PERSON_TYPES)
+        need_context_ml = allowed_set is None or bool(allowed_set & CONTEXT_TYPES)
         findings = detect_pii(
-            text, enable_ner=self._ner_for_system(system, need_person)
+            text, enable_ner=self._context_ml_for_system(system, need_context_ml)
         )
         if allowed_set:
             findings = [
@@ -107,6 +125,36 @@ class ProcessService:
     def _aad(self, namespace: str, payload_id: str) -> str:
         return f"{namespace}:{payload_id}"
 
+    def _result_for_live_state(
+        self,
+        payload: str,
+        payload_id: str,
+        live: OperationState,
+        *,
+        aad: str | None = None,
+    ) -> str:
+        fingerprint = hmac_hex(payload)
+        state_aad = aad or self._aad(live.namespace, payload_id)
+        if fingerprint == live.original_fp:
+            return decrypt(live.masked_enc, state_aad)
+        if fingerprint == live.masked_fp:
+            return decrypt(live.original_enc, state_aad)
+        raise ProcessError(409, "payload_id already bound to a different payload")
+
+    def _reload_race_winner(
+        self,
+        payload: str,
+        payload_id: str,
+        namespace: str,
+        aad: str,
+    ) -> str:
+        live = self.store.get_live(namespace, payload_id)
+        if live:
+            return self._result_for_live_state(payload, payload_id, live, aad=aad)
+        if self.store.get_seen(namespace, payload_id):
+            raise ProcessError(410, OPERATION_EXPIRED)
+        raise ProcessError(503, "state store race failed")
+
     def process(self, payload: str, payload_id: str, system: Optional[str] = None) -> str:
         if not payload_id:
             raise ProcessError(400, "payload_id must be non-empty")
@@ -114,15 +162,10 @@ class ProcessService:
         namespace = NS_AUTOTEST
         live = self.store.get_live(namespace, payload_id)
         if live:
-            fp = hmac_hex(payload)
-            if fp == live.original_fp:
-                return decrypt(live.masked_enc, self._aad(namespace, payload_id))
-            if fp == live.masked_fp:
-                return decrypt(live.original_enc, self._aad(namespace, payload_id))
-            raise ProcessError(409, "payload_id already bound to a different payload")
+            return self._result_for_live_state(payload, payload_id, live)
 
         if self.store.get_seen(namespace, payload_id):
-            raise ProcessError(410, "operation expired")
+            raise ProcessError(410, OPERATION_EXPIRED)
 
         findings = self.detect(payload, system)
         masked = apply_dev_redact(payload, findings)
@@ -139,18 +182,7 @@ class ProcessService:
         )
         created = self.store.create_atomic(state)
         if not created:
-            # lost race — reload winner
-            live = self.store.get_live(namespace, payload_id)
-            if not live:
-                if self.store.get_seen(namespace, payload_id):
-                    raise ProcessError(410, "operation expired")
-                raise ProcessError(503, "state store race failed")
-            fp = hmac_hex(payload)
-            if fp == live.original_fp:
-                return decrypt(live.masked_enc, aad)
-            if fp == live.masked_fp:
-                return decrypt(live.original_enc, aad)
-            raise ProcessError(409, "payload_id already bound to a different payload")
+            return self._reload_race_winner(payload, payload_id, namespace, aad)
 
         log.debug("mask payload_id=%s findings=%d", payload_id, len(findings))
         return masked
@@ -168,7 +200,7 @@ class ProcessService:
         if self.store.get_live(namespace, operation_id):
             raise ProcessError(409, "operation_id already exists")
         if self.store.get_seen(namespace, operation_id):
-            raise ProcessError(410, "operation expired")
+            raise ProcessError(410, OPERATION_EXPIRED)
 
         findings = self.detect(text, system)
         masked, mapping = apply_scoped_tokens(text, findings)
@@ -206,7 +238,7 @@ class ProcessService:
         live = self.store.get_live(namespace, operation_id)
         if not live:
             if self.store.get_seen(namespace, operation_id):
-                raise ProcessError(410, "operation expired")
+                raise ProcessError(410, OPERATION_EXPIRED)
             raise ProcessError(404, "operation not found")
         if live.system and live.system != system:
             raise ProcessError(403, "operation belongs to another system")

@@ -18,28 +18,22 @@ _LAT_TOKEN_RE = re.compile(r"[A-Z][A-Za-z\-]*")
 
 # Address component extractors (inside an already-validated ADDRESS span).
 _ADDR_INDEX_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
-# Address components: values only (орг: «ул.»/«д.» mask = excess).
-_STREET_TYPE_TOKEN = (
-    r"ул|улица|улице|пр|пр\-т|проспект|проспекте|пер|переулок|ш|шоссе|"
-    r"б\-р|бульвар|наб|набережная|пл|площадь|проезд"
+_ADDR_CITY_RE = re.compile(
+    r"(?i)(?:(?:г\.|город)\s*)?([А-ЯЁ][А-Яа-яЁё\-]+)"
 )
-_ADDR_HOUSE_RE = re.compile(r"(?i)(?:(?:д\.|дом)\s*)(\d+[А-Яа-яA-Za-z]?)")
-_ADDR_HOUSE_BARE_RE = re.compile(r"(?:,\s*|\s+)(\d+[А-Яа-яA-Za-z]?)(?!\d)(?!\s*(?:кв|квартира|корп|стр))")
-_ADDR_FLAT_RE = re.compile(r"(?i)(?:кв\.|квартира)\s*(\d+)")
-_ADDR_CORP_RE = re.compile(r"(?i)(?:корп\.|корпус|стр\.|строен\w*)\s*(\d+[А-Яа-яA-Za-z]?)")
 _ADDR_STREET_RE = re.compile(
-    r"(?i)(?:"
+    r"(?i)("
     r"(?:ул\.|улица|пр\.|пр\-т|проспект|пер\.|переулок|ш\.|шоссе|б\-р|бульвар|наб\.|пл\.|площадь)"
-    r"\s+([А-ЯЁа-яёA-Za-z0-9\-\.]+)"
+    r"\s+[А-ЯЁа-яёA-Za-z0-9\-\.]+"
     r"|"
-    r"([А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+(?:\s+[А-Яа-яёA-Za-z0-9\-\.]+)?)\s+"
-    r"(?:ул\.|улица|пр\.|пр\-т|проспект|проспекте|пер\.|переулок|ш\.|шоссе|б\-р|бульвар|наб\.|пл\.|площадь)"
+    r"[А-ЯЁ][А-Яа-яЁёA-Za-z0-9\-\.]+\s+"
+    r"(?:ул\.|улица|пр\.|пр\-т|проспект|пер\.|переулок|ш\.|шоссе|б\-р|бульвар|наб\.|пл\.|площадь)"
     r")"
 )
-_ADDR_CITY_RE = re.compile(
-    r"(?:(?:г\.|город)\s*)?([А-ЯЁ][А-Яа-яЁё\-]+)"
-)
-_NOT_CITY_RE = re.compile(rf"(?i)^(?:{_STREET_TYPE_TOKEN})$")
+# Include role prefixes in house/flat spans so redact matches full-address baselines.
+_ADDR_HOUSE_RE = re.compile(r"(?i)((?:д\.|дом)\s*\d+[А-ЯA-Z]?)")
+_ADDR_FLAT_RE = re.compile(r"(?i)((?:кв\.|квартира)\s*\d+)")
+_ADDR_CORP_RE = re.compile(r"(?i)((?:корп\.|корпус|стр\.|строен\w*)\s*\d+[А-ЯA-Z]?)")
 
 
 def classify_fio_parts(tokens: list[str]) -> list[str]:
@@ -54,17 +48,15 @@ def classify_fio_parts(tokens: list[str]) -> list[str]:
         if _PATRONYMIC_RE.search(tokens[1]):
             return ["first", "middle"]
         return ["first", "last"]
-    if n >= 3:
-        toks = tokens[:3]
-        if _PATRONYMIC_RE.search(toks[1]):
-            # Иван Иванович Петров
-            return ["first", "middle", "last"]
-        if _PATRONYMIC_RE.search(toks[2]):
-            # Иванов Иван Иванович
-            return ["last", "first", "middle"]
-        # Official form without clear patronymic cue
+    toks = tokens[:3]
+    if _PATRONYMIC_RE.search(toks[1]):
+        # Иван Иванович Петров
+        return ["first", "middle", "last"]
+    if _PATRONYMIC_RE.search(toks[2]):
+        # Иванов Иван Иванович
         return ["last", "first", "middle"]
-    return ["last"] * n
+    # Official form without clear patronymic cue
+    return ["last", "first", "middle"]
 
 
 def split_person_span(
@@ -132,6 +124,109 @@ def split_cardholder_span(
     ]
 
 
+def _append_address_part(
+    found: list[Finding],
+    covered: list[tuple[int, int]],
+    *,
+    start: int,
+    rel_start: int,
+    rel_end: int,
+    part: str,
+    score: float,
+    detector: str,
+    decision: str,
+    reason: str,
+) -> None:
+    span_start, span_end = start + rel_start, start + rel_end
+    overlaps = any(
+        not (span_end <= old_start or span_start >= old_end)
+        for old_start, old_end in covered
+    )
+    if overlaps:
+        return
+    covered.append((span_start, span_end))
+    found.append(
+        Finding(
+            "ADDRESS",
+            span_start,
+            span_end,
+            score,
+            detector,
+            decision,
+            reason,
+            part=part,
+        )
+    )
+
+
+def _collect_address_parts(
+    text: str,
+    start: int,
+    end: int,
+    score: float,
+    detector: str,
+    decision: str,
+    reason: str,
+) -> list[Finding]:
+    chunk = text[start:end]
+    found: list[Finding] = []
+    covered: list[tuple[int, int]] = []
+    patterns = (
+        (_ADDR_INDEX_RE, "index"),
+        (_ADDR_STREET_RE, "street"),
+        (_ADDR_HOUSE_RE, "house"),
+        (_ADDR_FLAT_RE, "flat"),
+        (_ADDR_CORP_RE, "building"),
+    )
+    for regex, part in patterns:
+        for match in regex.finditer(chunk):
+            _append_address_part(
+                found,
+                covered,
+                start=start,
+                rel_start=match.start(1),
+                rel_end=match.end(1),
+                part=part,
+                score=score,
+                detector=detector,
+                decision=decision,
+                reason=reason,
+            )
+
+    for match in _ADDR_CITY_RE.finditer(chunk):
+        before = len(found)
+        _append_address_part(
+            found,
+            covered,
+            start=start,
+            rel_start=match.start(1),
+            rel_end=match.end(1),
+            part="city",
+            score=score,
+            detector=detector,
+            decision=decision,
+            reason=reason,
+        )
+        if len(found) > before:
+            break
+    return found
+
+
+def _address_parts_cover_alnum(
+    text: str,
+    start: int,
+    end: int,
+    findings: list[Finding],
+) -> bool:
+    covered = {
+        index
+        for finding in findings
+        for index in range(finding.start, finding.end)
+        if text[index].isalnum()
+    }
+    return all(not text[index].isalnum() or index in covered for index in range(start, end))
+
+
 def split_address_span(
     text: str,
     start: int,
@@ -142,46 +237,28 @@ def split_address_span(
     decision: str = "mask",
     reason: str = "",
 ) -> list[Finding]:
-    """Emit city / street / house / flat (and index) inside an ADDRESS span."""
-    chunk = text[start:end]
-    found: list[Finding] = []
-    covered: list[tuple[int, int]] = []
+    """Emit semantic address parts when they fully cover the original value."""
+    found = _collect_address_parts(
+        text,
+        start,
+        end,
+        score,
+        detector,
+        decision,
+        reason,
+    )
+    fallback = Finding(
+        "ADDRESS",
+        start,
+        end,
+        score,
+        detector,
+        decision,
+        reason,
+        part="",
+    )
+    if not found or not _address_parts_cover_alnum(text, start, end, found):
+        return [fallback]
+    return found
 
-    def _add(rel_s: int, rel_e: int, part: str) -> None:
-        s, e = start + rel_s, start + rel_e
-        if any(not (e <= a or s >= b) for a, b in covered):
-            return
-        covered.append((s, e))
-        found.append(
-            Finding("ADDRESS", s, e, score, detector, decision, reason, part=part)
-        )
 
-    for m in _ADDR_INDEX_RE.finditer(chunk):
-        _add(m.start(1), m.end(1), "index")
-    for m in _ADDR_STREET_RE.finditer(chunk):
-        g = 1 if m.group(1) is not None else 2
-        _add(m.start(g), m.end(g), "street")
-    for m in _ADDR_HOUSE_RE.finditer(chunk):
-        _add(m.start(1), m.end(1), "house")
-    if not any(f.part == "house" for f in found):
-        for m in _ADDR_HOUSE_BARE_RE.finditer(chunk):
-            # Prefer trailing house after street/comma
-            _add(m.start(1), m.end(1), "house")
-            break
-    for m in _ADDR_FLAT_RE.finditer(chunk):
-        _add(m.start(1), m.end(1), "flat")
-    for m in _ADDR_CORP_RE.finditer(chunk):
-        _add(m.start(1), m.end(1), "building")
-    for m in _ADDR_CITY_RE.finditer(chunk):
-        token = m.group(1)
-        if _NOT_CITY_RE.match(token):
-            continue
-        s, e = start + m.start(1), start + m.end(1)
-        if any(not (e <= a or s >= b) for a, b in covered):
-            continue
-        _add(m.start(1), m.end(1), "city")
-        break
-
-    if found:
-        return found
-    return [Finding("ADDRESS", start, end, score, detector, decision, reason, part="")]

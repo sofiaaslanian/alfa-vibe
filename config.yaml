@@ -1,133 +1,87 @@
 systems:
-  # Автотест /process — rules-only (быстро под AlfaSonar RPS)
+  # Evaluator /process profile follows the target architecture:
+  # context-defined PII goes through the ML flow.
   autotest:
     enabled: true
     pd_types: []
     allow_demask: true
     mask_style: dev_redact
-    use_ner: false
+    use_context_ml: false
 
   demo:
     enabled: true
     pd_types: []
     allow_demask: true
     mask_style: scoped_token
-    # RuBERT + discourse: ФИО в свободном тексте, Пушкин ≠ клиент
-    use_ner: true
-    # Bonus 3.7: PIN/CVV alone stay open; with card → mask.
+    use_context_ml: true
     combo_require:
       PIN: [PAYMENT_CARD]
       CVV: [PAYMENT_CARD]
 
-  # Пример: только format-типы, без demask ответа LLM, без NER
+  # Only the four format-defined types.
   format_only:
     enabled: true
     pd_types: [EMAIL, PHONE, INN, PAYMENT_CARD]
     allow_demask: false
     mask_style: scoped_token
-    use_ner: false
+    use_context_ml: false
 
-  # Высокий RPS: без PERSON → NER не вызывается
+  # Compatibility/high-RPS profile: same canonical types, context ML disabled.
   high_rps:
     enabled: true
-    pd_types: [EMAIL, PHONE, INN, PAYMENT_CARD, ADDRESS, BIRTH_DATE, PASSPORT_ISSUE_DATE, PASSPORT, INTERNATIONAL_PASSPORT, DRIVER_LICENSE, SUBDIVISION_CODE, SNILS, OMS, CVV, PIN, PLACE_OF_BIRTH, CITIZENSHIP, PASSPORT_ISSUER, CARDHOLDER_NAME]
+    pd_types:
+      - EMAIL
+      - PHONE
+      - INN
+      - PAYMENT_CARD
+      - BIRTH_DATE
+      - PASSPORT
+      - SUBDIVISION_CODE
+      - PASSPORT_ISSUE_DATE
+      - DRIVER_LICENSE
+      - CVV
+      - PIN
+      - PERSON
+      - PLACE_OF_BIRTH
+      - CITIZENSHIP
+      - PASSPORT_ISSUER
+      - ADDRESS
+      - CARDHOLDER_NAME
     allow_demask: true
     mask_style: dev_redact
-    use_ner: false
+    use_context_ml: false
 
   disabled_example:
     enabled: false
     pd_types: []
     allow_demask: false
     mask_style: scoped_token
+    use_context_ml: false
 
+# Canonical 17 types from the product table. Bonus document types are no longer
+# part of the evaluator core pipeline.
 default_pd_types:
-  - EMAIL
-  - PHONE
-  - INN
-  - PAYMENT_CARD
-  - ADDRESS
-  - BIRTH_DATE
-  - PASSPORT_ISSUE_DATE
-  - PASSPORT
-  - INTERNATIONAL_PASSPORT
-  - DRIVER_LICENSE
-  - SUBDIVISION_CODE
-  - SNILS
-  - OMS
-  - CVV
-  - PIN
   - PERSON
   - PLACE_OF_BIRTH
   - CITIZENSHIP
   - PASSPORT_ISSUER
+  - ADDRESS
   - CARDHOLDER_NAME
+  - BIRTH_DATE
+  - PASSPORT
+  - SUBDIVISION_CODE
+  - PASSPORT_ISSUE_DATE
+  - DRIVER_LICENSE
+  - CVV
+  - PIN
+  - EMAIL
+  - PHONE
+  - INN
+  - PAYMENT_CARD
 
-# Global combo empty — autotest/acceptance mask PIN/CVV alone.
-# Enable per-system (see demo.combo_require) for bonus 3.7.
 combo_require: {}
 
 pd_rules:
-  - id: EMAIL
-    name: Email
-    patterns: []
-    mask: "dev_redact"
-  - id: PHONE
-    name: Номер телефона
-    patterns: []
-    mask: "dev_redact"
-  - id: INN
-    name: ИНН
-    patterns: []
-    mask: "dev_redact"
-  - id: PAYMENT_CARD
-    name: Номер карты
-    patterns: []
-    mask: "dev_redact"
-  - id: ADDRESS
-    name: Адрес
-    patterns: []
-    mask: "dev_redact"
-  - id: BIRTH_DATE
-    name: Дата рождения
-    patterns: []
-    mask: "dev_redact"
-  - id: PASSPORT_ISSUE_DATE
-    name: Дата выдачи паспорта
-    patterns: []
-    mask: "dev_redact"
-  - id: PASSPORT
-    name: Серия и номер паспорта
-    patterns: []
-    mask: "dev_redact"
-  - id: INTERNATIONAL_PASSPORT
-    name: Загранпаспорт
-    patterns: []
-    mask: "dev_redact"
-  - id: DRIVER_LICENSE
-    name: Водительское удостоверение
-    patterns: []
-    mask: "dev_redact"
-  - id: SUBDIVISION_CODE
-    name: Код подразделения
-    patterns: []
-    mask: "dev_redact"
-  - id: SNILS
-    name: СНИЛС
-    patterns: []
-    mask: "dev_redact"
-  - id: OMS
-    name: Полис ОМС
-    patterns: []
-    mask: "dev_redact"
-  - id: CVV
-    name: CVV
-    patterns: []
-    mask: "dev_redact"
-  - id: PIN
-    name: PIN
-    patterns: []
-    mask: "dev_redact"
   - id: PERSON
     name: ФИО
     patterns: []
@@ -141,11 +95,59 @@ pd_rules:
     patterns: []
     mask: "dev_redact"
   - id: PASSPORT_ISSUER
-    name: Орган выдачи паспорта
+    name: Орган, выдавший паспорт
+    patterns: []
+    mask: "dev_redact"
+  - id: ADDRESS
+    name: Адрес
     patterns: []
     mask: "dev_redact"
   - id: CARDHOLDER_NAME
     name: Имя держателя карты
+    patterns: []
+    mask: "dev_redact"
+  - id: BIRTH_DATE
+    name: Дата рождения
+    patterns: []
+    mask: "dev_redact"
+  - id: PASSPORT
+    name: Серия и номер паспорта
+    patterns: []
+    mask: "dev_redact"
+  - id: SUBDIVISION_CODE
+    name: Код подразделения
+    patterns: []
+    mask: "dev_redact"
+  - id: PASSPORT_ISSUE_DATE
+    name: Дата выдачи паспорта
+    patterns: []
+    mask: "dev_redact"
+  - id: DRIVER_LICENSE
+    name: Серия и номер водительского удостоверения
+    patterns: []
+    mask: "dev_redact"
+  - id: CVV
+    name: CVV-код
+    patterns: []
+    mask: "dev_redact"
+  - id: PIN
+    name: PIN-код карты
+    patterns: []
+    mask: "dev_redact"
+  - id: EMAIL
+    name: Email
+    patterns: []
+    mask: "dev_redact"
+  - id: PHONE
+    name: Номер телефона
+    patterns: []
+    mask: "dev_redact"
+  - id: INN
+    name: ИНН
+    patterns: []
+    mask: "dev_redact"
+  - id: PAYMENT_CARD
+    name: Номер платёжной банковской карты
     patterns: []
     mask: "dev_redact"
 

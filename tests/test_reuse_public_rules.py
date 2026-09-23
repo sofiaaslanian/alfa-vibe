@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.config import load_config
 from app.pii import checksums, rules
 from app.pii.detect import detect_pii
+from app.pii.structural import normalize_structures
 from app.process import ProcessService
 from app.state import MemoryStateStore
 
@@ -40,7 +41,7 @@ def test_cvv_oborote_phrase():
 def test_passport_filler_words():
     # Cloud.ru-style filler between keyword and number → series + number spans
     text = "С моим паспортом данные 45 11 123456 уже внесены"
-    f = rules.detect_passport(text)
+    f = normalize_structures(text, rules.detect_passport(text))
     assert len(f) >= 2
     digits = "".join(c for x in f for c in text[x.start : x.end] if c.isdigit())
     assert digits == "4511123456"
@@ -48,7 +49,8 @@ def test_passport_filler_words():
 
 
 def test_person_patronymic_candidate():
-    raw = rules.detect_person_patronymic("Вчера Петров Иван Сергеевич пришёл в банк")
+    text = "Вчера Петров Иван Сергеевич пришёл в банк"
+    raw = normalize_structures(text, rules.detect_person_patronymic(text))
     assert len(raw) == 3
     assert {x.part for x in raw} == {"last", "first", "middle"}
     # Without personal claim discourse drops it

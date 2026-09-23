@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from app.pii.detect import detect_pii
 from app.pii import rules
+from app.pii.structural import normalize_structures
 
+
+
+CVC_TEXT = "мой CVC код 532"
 
 def test_email_positive():
     text = "Клиент: ivanov@mail.ru написал письмо"
@@ -61,7 +65,7 @@ def test_pipeline_format_mix():
 def test_passport_context():
     # labelled series/number → two digit spans (no «номер» service word)
     text = "Паспорт клиента: серия 4510, номер 123456"
-    f = rules.detect_passport(text)
+    f = normalize_structures(text, rules.detect_passport(text))
     assert len(f) >= 2
     vals = {text[x.start : x.end] for x in f}
     assert "4510" in vals
@@ -84,17 +88,17 @@ def test_textual_dates_and_negatives():
     assert rules.detect_birth_date("Дата публикации: 3 мая 1998 года") == []
     assert rules.detect_pin("PIN SIM-карты: 9057") == []
     assert rules.detect_address("Адрес офиса компании: ул. Лесная, д. 5") == []
-    assert rules.detect_inn("Номер договора: 123456789047")
-    assert rules.detect_card("Идентификатор операции: 4111111111111111")
+    assert rules.detect_inn("Номер договора: 123456789047") == []
+    assert rules.detect_card("Идентификатор операции: 4111111111111111") == []
     assert rules.detect_email("📧 Почта клиента: anna.petrov+test@example.com")
 
 
 def test_cvv_requires_anchor():
     assert rules.detect_cvv("код офиса: 123") == []
     assert len(rules.detect_cvv("CVV карты: 123")) == 1
-    assert len(rules.detect_cvv("мой CVC код 532")) == 1
-    assert rules.detect_cvv("мой CVC код 532")[0].start == (
-        "мой CVC код 532".index("532")
+    assert len(rules.detect_cvv(CVC_TEXT)) == 1
+    assert rules.detect_cvv(CVC_TEXT)[0].start == (
+        CVC_TEXT.index("532")
     )
     assert len(rules.detect_cvv("CVC: 532")) == 1
     assert rules.detect_cvv("заказ код 532") == []

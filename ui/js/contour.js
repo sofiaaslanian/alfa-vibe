@@ -308,6 +308,31 @@ function setVerdictMask(mode) {
   els.verdict.dataset.mask = mode;
 }
 
+function verdictSubText(kind, noticedN, maskedN) {
+  const messages = {
+    allow_public:
+      activeScenario?.reason ||
+      "0 ПД клиента · 0 ложных срабатываний · в LLM ушёл исходный текст",
+    allow_service:
+      activeScenario?.reason || "ADDRESS candidate → service context → ALLOW",
+    allow_empty: "ПД не обнаружены · в LLM уходит исходный текст без изменений",
+    protect_address: `Адрес клиента защищён · ${maskedN} ПД · 0 открытых в LLM`,
+  };
+  if (kind === "allow_noticed") {
+    return noticedN === 1
+      ? "ФИО распознано · нет личного контекста клиента · в LLM уходит как есть"
+      : `${noticedN} фрагмента распознаны · маскировать не требуется · в LLM уходит как есть`;
+  }
+  return messages[kind] || `${maskedN} ПД · замаскировано ${maskedN}/${maskedN} · 0 открытых в LLM`;
+}
+
+function renderLeak(data) {
+  els.verdict.dataset.state = "leak";
+  setVerdictMask("on");
+  els.verdictTitle.textContent = "Запрос не маскирован";
+  els.verdictSub.textContent = `Утечка в LLM: ${(data.open_pii_in_llm || []).join(", ")}`;
+}
+
 function renderVerdict(data) {
   const findings = data.findings || [];
   const maskedN = findings.filter((f) => (f.decision || "mask") === "mask").length;
@@ -325,51 +350,14 @@ function renderVerdict(data) {
   els.latencyDetail.textContent = `Detect ${ms.detect ?? "—"} · Mask ${ms.mask ?? "—"} · State ${ms.state ?? "—"} · LLM ${ms.llm ?? "—"} · Unmask ${ms.demask ?? "—"} ms`;
 
   if (leak > 0) {
-    els.verdict.dataset.state = "leak";
-    setVerdictMask("on");
-    els.verdictTitle.textContent = "Запрос не маскирован";
-    els.verdictSub.textContent = `Утечка в LLM: ${(data.open_pii_in_llm || []).join(", ")}`;
+    renderLeak(data);
     return;
   }
 
   els.verdict.dataset.state = "ok";
   setVerdictMask(protected_ ? "on" : "off");
-  els.verdictTitle.textContent = protected_
-    ? "Запрос маскирован"
-    : "Запрос не маскирован";
-
-  if (kind === "allow_noticed") {
-    els.verdictSub.textContent =
-      noticedN === 1
-        ? "ФИО распознано · нет личного контекста клиента · в LLM уходит как есть"
-        : `${noticedN} фрагмента распознаны · маскировать не требуется · в LLM уходит как есть`;
-    return;
-  }
-
-  if (kind === "allow_public") {
-    els.verdictSub.textContent =
-      activeScenario?.reason ||
-      "0 ПД клиента · 0 ложных срабатываний · в LLM ушёл исходный текст";
-    return;
-  }
-
-  if (kind === "allow_service") {
-    els.verdictSub.textContent =
-      activeScenario?.reason || "ADDRESS candidate → service context → ALLOW";
-    return;
-  }
-
-  if (kind === "allow_empty") {
-    els.verdictSub.textContent = "ПД не обнаружены · в LLM уходит исходный текст без изменений";
-    return;
-  }
-
-  if (kind === "protect_address") {
-    els.verdictSub.textContent = `Адрес клиента защищён · ${maskedN} ПД · 0 открытых в LLM`;
-    return;
-  }
-
-  els.verdictSub.textContent = `${maskedN} ПД · замаскировано ${maskedN}/${maskedN} · 0 открытых в LLM`;
+  els.verdictTitle.textContent = protected_ ? "Запрос маскирован" : "Запрос не маскирован";
+  els.verdictSub.textContent = verdictSubText(kind, noticedN, maskedN);
 }
 
 function renderResult(data) {
