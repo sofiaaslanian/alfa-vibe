@@ -129,93 +129,103 @@ def expand_findings_to_words(text: str, findings: list[Finding]) -> list[Finding
     return out
 
 
-def attach_following_name_tokens(
-    text: str, findings: list[Finding], *, max_extra: int = 2
+def _base_person_finding(finding: Finding, part: str) -> Finding:
+    return Finding(
+        "PERSON",
+        finding.start,
+        finding.end,
+        finding.score,
+        finding.detector,
+        getattr(finding, "decision", "mask"),
+        getattr(finding, "reason", ""),
+        part=part,
+    )
+
+
+def _following_name_candidates(
+    text: str,
+    finding: Finding,
+    max_extra: int,
 ) -> list[Finding]:
-    """If RuBERT tagged only first name, emit following Capital tokens as last/middle."""
-    out: list[Finding] = []
-    for f in findings:
-        if f.type != "PERSON":
-            out.append(f)
-            continue
-        part = getattr(f, "part", "") or "first"
-        if part not in {"", "first"}:
-            out.append(f)
-            continue
-        # Already multi-token in one span — split later via parts.split_person_span
-        if re.search(r"\s", text[f.start : f.end].strip()):
-            out.append(f)
-            continue
-        out.append(
+    pending: list[Finding] = []
+    cursor = finding.end
+    while len(pending) < max_extra:
+        match = _NEXT_NAME_TOKEN_RE.match(text[cursor:])
+        if not match:
+            break
+        token = match.group(2)
+        if token.casefold() in _NOT_NAME_FOLLOW:
+            break
+        start = cursor + match.start(2)
+        end = cursor + match.end(2)
+        cursor += match.end()
+        pending.append(
             Finding(
                 "PERSON",
-                f.start,
-                f.end,
-                f.score,
-                f.detector,
-                getattr(f, "decision", "mask"),
-                getattr(f, "reason", ""),
-                part="first" if not part else part,
+                start,
+                end,
+                finding.score * 0.95,
+                finding.detector,
+                getattr(finding, "decision", "mask"),
+                getattr(finding, "reason", ""),
+                part="",
             )
         )
-        end = f.end
-        extras = 0
-        labels_queue = ["last"] if max_extra == 1 else ["last", "middle"]
-        # Prefer: first + last; if two extras, first + middle + last (swap)
-        pending: list[Finding] = []
-        while extras < max_extra:
-            m = _NEXT_NAME_TOKEN_RE.match(text[end:])
-            if not m:
-                break
-            token = m.group(2)
-            if token.casefold() in _NOT_NAME_FOLLOW:
-                break
-            tok_start = end + m.start(2)
-            tok_end = end + m.end(2)
-            end = end + m.end()
-            pending.append(
-                Finding(
-                    "PERSON",
-                    tok_start,
-                    tok_end,
-                    f.score * 0.95,
-                    f.detector,
-                    getattr(f, "decision", "mask"),
-                    getattr(f, "reason", ""),
-                    part="",  # classify below
-                )
-            )
-            extras += 1
-        if not pending:
-            continue
-        tokens = [text[f.start : f.end]] + [text[p.start : p.end] for p in pending]
-        from app.pii.parts import classify_fio_parts
+    return pending
 
-        labels = classify_fio_parts(tokens)
-        # Relabel the already-appended first finding
-        out[-1] = Finding(
+
+def _expanded_person_sequence(
+    text: str,
+    finding: Finding,
+    max_extra: int,
+) -> list[Finding]:
+    part = getattr(finding, "part", "") or "first"
+    if part not in {"", "first"}:
+        return [finding]
+    if re.search(r"\s", text[finding.start : finding.end].strip()):
+        return [finding]
+
+    base = _base_person_finding(finding, part or "first")
+    pending = _following_name_candidates(text, finding, max_extra)
+    if not pending:
+        return [base]
+
+    from app.pii.parts import classify_fio_parts
+
+    tokens = [text[base.start : base.end]] + [
+        text[item.start : item.end] for item in pending
+    ]
+    labels = classify_fio_parts(tokens)
+    relabeled = [_base_person_finding(base, labels[0])]
+    relabeled.extend(
+        Finding(
             "PERSON",
-            out[-1].start,
-            out[-1].end,
-            out[-1].score,
-            out[-1].detector,
-            out[-1].decision,
-            out[-1].reason,
-            part=labels[0],
+            item.start,
+            item.end,
+            item.score,
+            item.detector,
+            item.decision,
+            item.reason,
+            part=label,
         )
-        for p, lab in zip(pending, labels[1:]):
-            out.append(
-                Finding(
-                    "PERSON",
-                    p.start,
-                    p.end,
-                    p.score,
-                    p.detector,
-                    p.decision,
-                    p.reason,
-                    part=lab,
-                )
-            )
+        for item, label in zip(pending, labels[1:])
+    )
+    return relabeled
+
+
+def attach_following_name_tokens(
+    text: str,
+    findings: list[Finding],
+    *,
+    max_extra: int = 2,
+) -> list[Finding]:
+    """If RuBERT tagged only first name, emit following Capital tokens."""
+    out: list[Finding] = []
+    for finding in findings:
+        if finding.type == "PERSON":
+            out.extend(_expanded_person_sequence(text, finding, max_extra))
+        else:
+            out.append(finding)
     return out
 
 
