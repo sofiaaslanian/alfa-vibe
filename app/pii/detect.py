@@ -388,7 +388,10 @@ def detect_pii(
             if enable_ner is True and not ner.enabled:
                 ner.enabled = True
                 ner.use_local = True
-            context_ml_findings = ner.detect(text)
+            raw_entities = ner.detect_raw(text)
+            from app.pii.context_ml import raw_entities_to_context_findings
+
+            context_ml_findings = raw_entities_to_context_findings(text, raw_entities)
         except Exception:
             log.exception("NER detection failed")
             if fail_closed:
