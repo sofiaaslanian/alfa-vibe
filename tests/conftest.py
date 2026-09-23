@@ -109,6 +109,20 @@ def detect():
     def _detect(text: str, enabled_types: list[str] | None = None):
         findings = detect_pii(text, enable_ner=False)
         want = _want_types(enabled_types)
+
+        # Bonus document detectors remain supported as explicit extensions, but
+        # are intentionally outside the canonical 17-type core pipeline.
+        if want:
+            from app.pii import rules
+
+            bonus = {
+                "SNILS": rules.detect_snils,
+                "INTERNATIONAL_PASSPORT": rules.detect_international_passport,
+                "OMS": rules.detect_oms,
+            }
+            for typ, detector in bonus.items():
+                if typ in want:
+                    findings.extend(detector(text))
         out = []
         for f in findings:
             if getattr(f, "decision", "mask") != "mask":
