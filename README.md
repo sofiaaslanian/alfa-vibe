@@ -71,7 +71,7 @@ curl -s localhost:8080/proxy/chat \
 
 | Система | Типы | demask | NER | Назначение |
 |---|---|---|---|---|
-| `autotest` | все | да | нет | `/process` нагрузка |
+| `autotest` | все | да | **RuBERT + rules** | `/process` evaluator |
 | `demo` | все + combo PIN/CVV↔карта | да | **RuBERT** | proxy / UI / ловушки |
 | `format_only` | email/phone/INN/card | нет | нет | урезанный consumer |
 | `high_rps` | все 17 типов | да | нет | нагрузка без ML |
@@ -107,7 +107,7 @@ STORAGE_BACKEND=memory NER_ENABLED=0 uvicorn app.main:app --port 8080 &
 - Prometheus: `GET /metrics` (Latency / RPS / TPS)
 - Ready: `GET /ready` (проверка state store)
 - ML для **demo/proxy**: `CONTEXT_ML_ENABLED=1` + `use_context_ml: true` (RuBERT ∪ точные rules → discourse)
-- `/process` (autotest/high_rps): `use_ner: false` — RPS без ML
+- `/process` / `autotest`: hybrid ML + rules; `high_rps`: rules-only профиль для отдельной нагрузки
 - ФИО без NER (load): поля `ФИО:` / роль `Клиент Имя Фамилия`
 - Локальный smoke нагрузки:
   ```bash
