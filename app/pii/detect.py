@@ -311,60 +311,70 @@ def get_ner():
     return _ner
 
 
+def _ml_fail_closed(fail_closed_on_ner_error: bool | None) -> bool:
+    if fail_closed_on_ner_error is not None:
+        return fail_closed_on_ner_error
+    return os.getenv(
+        "CONTEXT_ML_FAIL_CLOSED",
+        os.getenv("NER_FAIL_CLOSED", "1"),
+    ) == "1"
+
+
+def _legacy_or_raw_ml_findings(text: str, ner) -> list[Finding]:
+    # Instance-level detect override is a legacy/test adapter that already
+    # returns canonical Findings. Prefer it over raw NER.
+    if "detect" in getattr(ner, "__dict__", {}):
+        return ner.detect(text)
+    if hasattr(ner, "detect_raw"):
+        raw_entities = ner.detect_raw(text)
+        from app.pii.context_ml import raw_entities_to_context_findings
+
+        return raw_entities_to_context_findings(text, raw_entities)
+    return ner.detect(text)
+
+
+def _context_ml_findings(
+    text: str,
+    *,
+    ner,
+    use_ner: bool,
+    enable_ner: bool | None,
+    fail_closed_on_ner_error: bool | None,
+) -> list[Finding] | None:
+    if not use_ner:
+        return None
+    try:
+        if enable_ner is True and not ner.enabled:
+            ner.enabled = True
+            ner.use_local = True
+        return _legacy_or_raw_ml_findings(text, ner)
+    except Exception:
+        log.exception("context ML detection failed")
+        if _ml_fail_closed(fail_closed_on_ner_error):
+            raise
+        return None
+
+
 def detect_pii(
     text: str,
     *,
     enable_ner: bool | None = None,
     fail_closed_on_ner_error: bool | None = None,
 ) -> list[Finding]:
-    """Run the canonical three-flow architecture.
-
-    1. FORMAT: format-defined rule flow.
-    2. FORMAT_CONTEXT: format candidate + contextual rule flow.
-    3. CONTEXT: ML-first contextual flow; labelled rule candidates remain as a
-       migration fallback until the contextual role model is fully deployed.
-    4. STRUCTURE: one shared atomic/composite normalization layer.
-    5. ELIGIBILITY + overlap resolver + masking downstream.
-    """
+    """Run three detection flows, then shared structure/policy resolution."""
     from app.pii.flows import run_detection_flows
     from app.pii.structural import normalize_structures
     from app.pii.validate import sanitize_format_findings
 
     ner = get_ner()
     use_ner = ner.enabled if enable_ner is None else enable_ner
-    context_ml_findings: list[Finding] | None = None
-
-    if use_ner:
-        fail_closed = (
-            os.getenv(
-                "CONTEXT_ML_FAIL_CLOSED",
-                os.getenv("NER_FAIL_CLOSED", "1"),
-            ) == "1"
-            if fail_closed_on_ner_error is None
-            else fail_closed_on_ner_error
-        )
-        try:
-            if enable_ner is True and not ner.enabled:
-                ner.enabled = True
-                ner.use_local = True
-            # An instance-level detect override is a legacy/test adapter
-            # that already returns canonical Findings. Prefer it over raw NER.
-            if "detect" in getattr(ner, "__dict__", {}):
-                context_ml_findings = ner.detect(text)
-            elif hasattr(ner, "detect_raw"):
-                raw_entities = ner.detect_raw(text)
-                from app.pii.context_ml import raw_entities_to_context_findings
-
-                context_ml_findings = raw_entities_to_context_findings(text, raw_entities)
-            else:
-                context_ml_findings = ner.detect(text)
-        except Exception:
-            log.exception("context ML detection failed")
-            if fail_closed:
-                raise
-            # Compatibility mode only: an explicit fail-open policy may fall
-            # back to legacy context rules by leaving findings as None.
-
+    context_ml_findings = _context_ml_findings(
+        text,
+        ner=ner,
+        use_ner=use_ner,
+        enable_ner=enable_ner,
+        fail_closed_on_ner_error=fail_closed_on_ner_error,
+    )
     findings = run_detection_flows(
         text,
         context_ml_findings=context_ml_findings,
