@@ -80,3 +80,51 @@ def test_raw_org_maps_to_passport_issuer_in_issuer_context():
     raw = [{"entity_group": "ORG", "start": start, "end": len(text), "score": 0.98}]
     out = raw_entities_to_context_findings(text, raw)
     assert any(f.type == "PASSPORT_ISSUER" for f in out)
+
+
+
+def test_context_ml_failure_is_fail_closed(monkeypatch):
+    import app.pii.detect as detect_mod
+
+    class BrokenNer:
+        enabled = True
+        use_local = False
+
+        def detect_raw(self, text):
+            raise RuntimeError("ml unavailable")
+
+    old = detect_mod._ner
+    detect_mod._ner = BrokenNer()
+    try:
+        monkeypatch.setenv("CONTEXT_ML_FAIL_CLOSED", "1")
+        try:
+            detect_mod.detect_pii("ФИО клиента: Иванов Иван", enable_ner=True)
+        except RuntimeError as exc:
+            assert str(exc) == "ml unavailable"
+        else:
+            raise AssertionError("required context ML failure must propagate")
+    finally:
+        detect_mod._ner = old
+
+
+def test_explicit_fail_open_is_compatibility_mode_only(monkeypatch):
+    import app.pii.detect as detect_mod
+
+    class BrokenNer:
+        enabled = True
+        use_local = False
+
+        def detect_raw(self, text):
+            raise RuntimeError("ml unavailable")
+
+    old = detect_mod._ner
+    detect_mod._ner = BrokenNer()
+    try:
+        findings = detect_mod.detect_pii(
+            "ФИО клиента: Иванов Иван",
+            enable_ner=True,
+            fail_closed_on_ner_error=False,
+        )
+        assert any(f.type == "PERSON" for f in findings)
+    finally:
+        detect_mod._ner = old
