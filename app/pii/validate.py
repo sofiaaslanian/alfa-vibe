@@ -1,111 +1,47 @@
-"""Post-filters for format PII (especially raw NER spans).
+"""Post-filters for non-group-1 ML format spans.
 
-Rules already enforce checksum / service roles. RuBERT often emits
-fragments or support contacts — drop those before discourse/resolve.
+The group-1 experiment intentionally leaves EMAIL, PHONE, INN and
+PAYMENT_CARD exactly as they behaved before the latest group-1 changes.
 """
 
 from __future__ import annotations
 
-import re
-
 from app.pii.detect import Finding
 
-_EMAIL_OK_RE = re.compile(
-    r"(?i)^[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?"
-    r"@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,24}$"
-)
-_SERVICE_EMAIL_LOCALS = {
-    "support",
-    "noreply",
-    "no-reply",
-    "no_reply",
-    "donotreply",
-    "do-not-reply",
-    "info",
-    "help",
-    "admin",
-    "abuse",
-    "postmaster",
-    "mailer-daemon",
-    "robot",
-    "bot",
-    "notifications",
-    "notify",
-}
-_SERVICE_EMAIL_DOMAINS = {
-    "bank.ru",
-    "support.bank.ru",
-    "example.invalid",
-}
-_SUPPORT_CUE_RE = re.compile(
-    r"(?i)(?:почта\s+поддержк|поддержк\w*|колл[\-\s]?центр|noreply|no[\-\s]?reply)"
-)
-_PERSONAL_EMAIL_CUE_RE = re.compile(
-    r"(?i)(?:почта\s+клиент|email\s+клиент|e-?mail\s+клиент|моя\s+почта|мой\s+email)"
-)
+
+def _digits(value: str) -> str:
+    return "".join(char for char in value if char.isdigit())
 
 
-def _digits(s: str) -> str:
-    return "".join(c for c in s if c.isdigit())
+def accept_format_finding(text: str, finding: Finding) -> bool:
+    """Validate ML spans outside experimental group 1."""
+    value = text[finding.start : finding.end]
 
+    if finding.type == "CVV":
+        digits = _digits(value)
+        return len(digits) in {3, 4} and digits == value.strip()
 
-def accept_format_finding(text: str, f: Finding) -> bool:
-    """False → drop finding (invalid / service / not personal format evidence)."""
-    value = text[f.start : f.end]
-    left = text[max(0, f.start - 80) : f.start]
-
-    if f.type == "EMAIL":
-        if "@@" in value or ".." in value or not _EMAIL_OK_RE.match(value.strip()):
-            return False
-        local, _, domain = value.partition("@")
-        local_l, domain_l = local.lower(), domain.lower()
-        personal = bool(_PERSONAL_EMAIL_CUE_RE.search(left))
-        if (
-            local_l in _SERVICE_EMAIL_LOCALS or domain_l in _SERVICE_EMAIL_DOMAINS
-        ) and not personal:
-            return False
-        if _SUPPORT_CUE_RE.search(left) and not personal:
-            return False
-        return True
-
-    if f.type == "INN":
-        from app.pii.ids.inn import validate_inn12
-
-        return validate_inn12(value)
-
-    if f.type == "PAYMENT_CARD":
-        from app.pii.ids.card import validate_card_digits
-
-        d = _digits(value)
-        if not (13 <= len(d) <= 19):
-            return False
-        # Strict Luhn for ML / residual spans — no keyword bypass here.
-        return validate_card_digits(d)
-
-    if f.type == "PHONE":
-        d = _digits(value)
-        if value.strip().startswith("+"):
-            return 10 <= len(d) <= 15
-        return len(d) in {10, 11}
-
-    if f.type == "CVV":
-        d = _digits(value)
-        return len(d) in {3, 4} and d == value.strip()
-
-    if f.type == "PIN":
-        d = _digits(value)
-        return 4 <= len(d) <= 6 and d == value.strip()
+    if finding.type == "PIN":
+        digits = _digits(value)
+        return 4 <= len(digits) <= 6 and digits == value.strip()
 
     return True
 
 
-def sanitize_format_findings(text: str, findings: list[Finding]) -> list[Finding]:
-    """Drop invalid/service spans from ML; leave rule detectors as-is."""
+def sanitize_format_findings(
+    text: str,
+    findings: list[Finding],
+) -> list[Finding]:
+    """Drop invalid ML CVV/PIN; leave group-1 spans untouched."""
     out: list[Finding] = []
-    for f in findings:
-        det = (f.detector or "").lower()
-        if det == "ml" or det.startswith("ml") or "ner" in det or "rubert" in det:
-            if not accept_format_finding(text, f):
-                continue
-        out.append(f)
+    for finding in findings:
+        detector = (finding.detector or "").lower()
+        is_ml = (
+            detector == "ml"
+            or detector.startswith("ml")
+            or "ner" in detector
+            or "rubert" in detector
+        )
+        if not is_ml or accept_format_finding(text, finding):
+            out.append(finding)
     return out
