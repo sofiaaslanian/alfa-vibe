@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
+      PYTHONPATH: "."
       STORAGE_BACKEND: memory
       CONTEXT_ML_ENABLED: "1"
       NER_ENABLED: "1"
@@ -36,6 +37,7 @@ jobs:
       - name: Run stage 1 evaluation
         run: python scripts/eval_stage1_identification.py
       - name: Upload result
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: stage1-identification-results
