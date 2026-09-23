@@ -1,0 +1,135 @@
+name: sonar-allrules-temp
+
+on:
+  push:
+    branches: [cursor/alfagen-sonar-10000]
+    paths: [.github/workflows/sonar-allrules-temp.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Snapshot submission tree
+        run: |
+          mkdir -p /tmp/src /tmp/out
+          git archive --format=tar HEAD | tar -x -C /tmp/src
+          rm -f /tmp/src/.github/workflows/sonar-allrules-temp.yml
+          chmod -R a+rwX /tmp/src
+
+      - name: Start SonarQube
+        run: |
+          docker run -d --name sonarqube -p 9000:9000 \
+            -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true sonarqube:community
+          for i in $(seq 1 120); do
+            s=$(curl -s http://localhost:9000/api/system/status | jq -r .status 2>/dev/null || true)
+            [ "$s" = "UP" ] && break
+            sleep 5
+          done
+          PASS='Sonar-Scan-Temp-2026!'
+          curl -s -u admin:admin -X POST "http://localhost:9000/api/users/change_password" \
+            --data-urlencode "login=admin" --data-urlencode "previousPassword=admin" \
+            --data-urlencode "password=$PASS" || true
+          curl -s -u "admin:$PASS" -X POST \
+            "http://localhost:9000/api/settings/set?key=sonar.multi-quality-mode.enabled&value=false" || true
+          echo "SONAR_PASS=$PASS" >> "$GITHUB_ENV"
+          echo "version=$(curl -s http://localhost:9000/api/server/version)" | tee /tmp/out/version.txt
+
+      - name: Build an all-rules profile and a complexity probe
+        run: |
+          A="admin:$SONAR_PASS"; B=http://localhost:9000
+          : > /tmp/out/profiles.txt
+          for lang in py js css web docker yaml secrets xml json; do
+            key=$(curl -s -u "$A" -X POST "$B/api/qualityprofiles/create" \
+              --data-urlencode "language=$lang" --data-urlencode "name=all-$lang" | jq -r '.profile.key // empty')
+            curl -s -u "$A" -X POST "$B/api/qualityprofiles/activate_rules" \
+              --data-urlencode "targetKey=$key" --data-urlencode "languages=$lang" > /dev/null
+            n=$(curl -s -u "$A" "$B/api/qualityprofiles/search?language=$lang" \
+              | jq -r '.profiles[] | select(.name=="all-'"$lang"'") | .activeRuleCount')
+            echo "all-$lang key=$key rules=$n" | tee -a /tmp/out/profiles.txt
+          done
+          # Cognitive complexity of every function, using Sonar's own counter.
+          for lang in py js; do
+            key=$(curl -s -u "$A" -X POST "$B/api/qualityprofiles/create" \
+              --data-urlencode "language=$lang" --data-urlencode "name=cc-$lang" | jq -r '.profile.key // empty')
+            echo "cc-$lang=$key" >> /tmp/out/profiles.txt
+          done
+          curl -s -u "$A" -X POST "$B/api/qualityprofiles/activate_rule" \
+            --data-urlencode "key=$(grep '^cc-py=' /tmp/out/profiles.txt | cut -d= -f2)" \
+            --data-urlencode "rule=python:S3776" --data-urlencode "severity=MAJOR" \
+            --data-urlencode "params=threshold=1"
+          curl -s -u "$A" -X POST "$B/api/qualityprofiles/activate_rule" \
+            --data-urlencode "key=$(grep '^cc-js=' /tmp/out/profiles.txt | cut -d= -f2)" \
+            --data-urlencode "rule=javascript:S3776" --data-urlencode "severity=MAJOR" \
+            --data-urlencode "params=threshold=1"
+
+      - name: Scan with all rules
+        run: |
+          A="admin:$SONAR_PASS"; B=http://localhost:9000
+          TOKEN=$(curl -s -u "$A" -X POST "$B/api/user_tokens/generate?name=ci" | jq -r .token)
+          echo "::add-mask::$TOKEN"
+          for lang in py js css web docker yaml secrets xml json; do
+            curl -s -u "$A" -X POST "$B/api/qualityprofiles/add_project" \
+              --data-urlencode "language=$lang" --data-urlencode "project=alfa-all" \
+              --data-urlencode "qualityProfile=all-$lang" || true
+          done
+          docker run --rm --network host -e SONAR_HOST_URL=$B -e SONAR_TOKEN=$TOKEN \
+            -v /tmp/src:/usr/src sonarsource/sonar-scanner-cli \
+            -Dsonar.projectKey=alfa-all -Dsonar.projectName=alfa-all \
+            -Dsonar.sources=. -Dsonar.scm.disabled=true > /tmp/out/scan-all.log 2>&1 \
+            || { echo "scan failed"; tail -n 30 /tmp/out/scan-all.log; }
+          CE=$(grep ceTaskUrl /tmp/src/.scannerwork/report-task.txt | cut -d= -f2-)
+          for i in $(seq 1 120); do
+            st=$(curl -s -u "$A" "$CE" | jq -r .task.status)
+            case "$st" in SUCCESS|FAILED|CANCELED) break;; esac
+            sleep 3
+          done
+          echo "all ce=$st"
+          curl -s -u "$A" "$B/api/issues/search?components=alfa-all&resolved=false&ps=500&severities=BLOCKER,CRITICAL,MAJOR" \
+            > /tmp/out/issues-major.json
+          curl -s -u "$A" "$B/api/issues/search?components=alfa-all&resolved=false&ps=500&severities=MINOR,INFO" \
+            > /tmp/out/issues-minor.json
+          echo "===== MAJOR+ ($(jq .total /tmp/out/issues-major.json)) MINOR+ ($(jq .total /tmp/out/issues-minor.json)) ====="
+          jq -r '.issues[] | [.severity, .rule, ((.component | sub("^[^:]*:"; "")) + ":" + ((.line // 0) | tostring)), .message] | @tsv' \
+            /tmp/out/issues-major.json | sort | tee /tmp/out/major.tsv
+
+      - name: Scan cognitive complexity with threshold 1
+        run: |
+          A="admin:$SONAR_PASS"; B=http://localhost:9000
+          TOKEN=$(curl -s -u "$A" -X POST "$B/api/user_tokens/generate?name=cc" | jq -r .token)
+          echo "::add-mask::$TOKEN"
+          for lang in py js; do
+            curl -s -u "$A" -X POST "$B/api/qualityprofiles/add_project" \
+              --data-urlencode "language=$lang" --data-urlencode "project=alfa-cc" \
+              --data-urlencode "qualityProfile=cc-$lang" || true
+          done
+          rm -rf /tmp/src/.scannerwork
+          docker run --rm --network host -e SONAR_HOST_URL=$B -e SONAR_TOKEN=$TOKEN \
+            -v /tmp/src:/usr/src sonarsource/sonar-scanner-cli \
+            -Dsonar.projectKey=alfa-cc -Dsonar.projectName=alfa-cc \
+            -Dsonar.sources=. -Dsonar.scm.disabled=true > /tmp/out/scan-cc.log 2>&1 || true
+          CE=$(grep ceTaskUrl /tmp/src/.scannerwork/report-task.txt | cut -d= -f2-)
+          for i in $(seq 1 120); do
+            st=$(curl -s -u "$A" "$CE" | jq -r .task.status)
+            case "$st" in SUCCESS|FAILED|CANCELED) break;; esac
+            sleep 3
+          done
+          echo "cc ce=$st"
+          curl -s -u "$A" "$B/api/issues/search?components=alfa-cc&resolved=false&ps=500" > /tmp/out/issues-cc.json
+          jq -r '.issues[] | [.rule, ((.component | sub("^[^:]*:"; "")) + ":" + ((.line // 0) | tostring)), .message] | @tsv' \
+            /tmp/out/issues-cc.json | sort -t$'\t' -k3 | tee /tmp/out/cc.tsv
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sonar-allrules
+          path: /tmp/out/
+          retention-days: 2
