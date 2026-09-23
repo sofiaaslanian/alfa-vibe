@@ -132,8 +132,10 @@ def expected_mask(text: str, values: list[str]) -> str:
     for value in values:
         start_at = cursor_by_value.get(value, 0)
         start = text.find(value, start_at)
+        while start >= 0 and any(protected[i] for i in range(start, start + len(value))):
+            start = text.find(value, start + 1)
         if start < 0:
-            raise AssertionError(f"Expected value {value!r} not found in {text!r}")
+            raise AssertionError(f"Expected unused value {value!r} not found in {text!r}")
         cursor_by_value[value] = start + len(value)
         for i in range(start, start + len(value)):
             protected[i] = True
