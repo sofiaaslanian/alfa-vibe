@@ -427,9 +427,7 @@ def detect_address(text: str) -> list[Finding]:
                 continue
             seen = {s for s in seen if not (span[0] <= s[0] and s[1] <= span[1])}
             seen.add(span)
-            from app.pii.parts import split_address_span
-
-            out.extend(split_address_span(text, span[0], span[1], 0.9, "address_rule_v3"))
+            out.append(Finding("ADDRESS", span[0], span[1], 0.9, "address_rule_v3"))
     # Drop nested leftovers
     out = [
         f
@@ -1065,9 +1063,7 @@ def detect_cardholder_name(text: str) -> list[Finding]:
         span = _trim_value_span(text, s, e)
         if not span:
             continue
-        from app.pii.parts import split_cardholder_span
-
-        out.extend(split_cardholder_span(text, span[0], span[1], 0.94, "cardholder_rule_v2"))
+        out.append(Finding("CARDHOLDER_NAME", span[0], span[1], 0.94, "cardholder_rule_v2"))
     return out
 
 
@@ -1267,9 +1263,7 @@ def detect_person_labelled(text: str) -> list[Finding]:
         if not span:
             return
         covered.add(span)
-        from app.pii.parts import split_person_span
-
-        out.extend(split_person_span(text, span[0], span[1], score, det))
+        out.append(Finding("PERSON", span[0], span[1], score, det))
 
     for m in PERSON_LABEL_RE.finditer(text):
         rest = text[m.end() :]
@@ -1333,9 +1327,7 @@ def detect_person_patronymic(text: str) -> list[Finding]:
         span = _trim_value_span(text, s, e)
         if not span:
             continue
-        from app.pii.parts import split_person_span
-
-        out.extend(split_person_span(text, span[0], span[1], 0.88, "person_patronymic_v1"))
+        out.append(Finding("PERSON", span[0], span[1], 0.88, "person_patronymic_v1"))
     return out
 
 
