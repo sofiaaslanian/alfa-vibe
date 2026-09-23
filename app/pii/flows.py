@@ -90,20 +90,37 @@ class ContextFlow:
         return findings
 
     @staticmethod
-    def detect(text: str, *, enable_ml: bool) -> FlowResult:
+    def detect(
+        text: str,
+        *,
+        ml_findings: list[Finding] | None = None,
+    ) -> FlowResult:
         findings = ContextFlow._rule_candidates(text)
+        if ml_findings:
+            # Only context-group outputs enter this flow. Format and
+            # format-context types stay owned by their rule pipelines.
+            findings.extend(
+                f
+                for f in ml_findings
+                if f.type in {
+                    "PERSON",
+                    "ADDRESS",
+                    "PLACE_OF_BIRTH",
+                    "CITIZENSHIP",
+                    "PASSPORT_ISSUER",
+                    "CARDHOLDER_NAME",
+                }
+            )
+        return FlowResult(findings, "context_ml" if ml_findings else "context_rules_fallback")
 
-        if enable_ml:
-            from app.pii.ner import get_context_ml_findings
 
-            findings.extend(get_context_ml_findings(text))
-
-        return FlowResult(findings, "context_ml" if enable_ml else "context_rules_fallback")
-
-
-def run_detection_flows(text: str, *, enable_context_ml: bool) -> list[Finding]:
+def run_detection_flows(
+    text: str,
+    *,
+    context_ml_findings: list[Finding] | None = None,
+) -> list[Finding]:
     findings: list[Finding] = []
     findings.extend(FormatFlow.detect(text).findings)
     findings.extend(FormatContextFlow.detect(text).findings)
-    findings.extend(ContextFlow.detect(text, enable_ml=enable_context_ml).findings)
+    findings.extend(ContextFlow.detect(text, ml_findings=context_ml_findings).findings)
     return findings
