@@ -38,10 +38,11 @@ jobs:
           texts = [
               "Я живу в Самаре на улице Ленина 5.",
               "Мой адрес: Москва, ул. Лесная, д. 10, кв. 5.",
+              "Клиентка Мария Соколова родилась 7 января 1992 года, адрес проживания: Казань, ул. Баумана, д. 7.",
           ]
           cfg=load_config("config.yaml")
           cfg.systems["diag"] = SystemConfig(
-              name="diag", enabled=True, pd_types=["ADDRESS"],
+              name="diag", enabled=True, pd_types=list(cfg.default_pd_types),
               allow_demask=True, mask_style="dev_redact",
               use_context_ml=False, use_ner=False,
           )
