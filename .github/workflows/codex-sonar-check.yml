@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [25.10.0.114319-community, 26.1.0.118079-community, 26.5.0.122743-community]
+        version: [9.9-community]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
